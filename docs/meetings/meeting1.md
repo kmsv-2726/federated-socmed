@@ -11,7 +11,7 @@ Sumithra S
 ---
 
 ## Attended By
-Sreepathy Vadakath Joshy, Hemanth Kumar G T, Ragul C V, Manikanta Sai Vignan
+Sreepathy Joshy, Hemanth Kumar G T, Ragul C V, Manikanta Sai Vignan
 
 ---
 

@@ -6,7 +6,7 @@
 ---
 
 ## Conducted By
-Sreepathy Vadakath Joshy
+Sreepathy Joshy
 
 ---
 
