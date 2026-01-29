@@ -1,4 +1,4 @@
-# Sprint 1 Meeting 3 Notes
+# Sprint 1 Meeting 2 Notes
 
 **Date:** 25/01/2026  
 **Tech Stack:** MERN Stack  
