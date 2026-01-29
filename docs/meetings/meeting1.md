@@ -10,6 +10,11 @@ Sumithra S
 
 ---
 
+## Attended By
+Sreepathy Vadakath Joshy, Hemanth Kumar G T, Ragul C V, Manikanta Sai Vignan
+
+---
+
 ## Epics & User Stories
 - Core epics identified: Authentication, Feeds  
 - No implementation started
@@ -59,7 +64,3 @@ Sumithra S
 
 ## Tasks
 - Each member to compe up with design templates/ideas
-
----
-
-## Next Meeting Scheduled: **13/01/2026**
