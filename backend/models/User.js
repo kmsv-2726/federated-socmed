@@ -61,6 +61,20 @@ const userSchema = new mongoose.Schema(
       unique: true
     },
 
+    /* ===== SOCIAL GRAPH ===== */
+
+    followers: {
+      type: [String], 
+      default: []
+    },
+
+    following: {
+      type: [String], 
+      default: []
+    },
+
+    /* ===== AUTH & STATUS ===== */
+
     role: {
       type: String,
       enum: ["user", "admin"],
@@ -85,13 +99,20 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+/* ===== INDEXES ===== */
+
 userSchema.index(
   { displayName: 1, serverName: 1 },
   { unique: true }
 );
+
 userSchema.index(
   { email: 1, serverName: 1 },
   { unique: true }
 );
+
+userSchema.index({ federatedId: 1 });
+userSchema.index({ followers: 1 });
+userSchema.index({ following: 1 });
 
 export default mongoose.model("User", userSchema);
