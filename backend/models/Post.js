@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const postSchema = new mongoose.Schema(
   {
@@ -90,13 +90,35 @@ const postSchema = new mongoose.Schema(
     likedBy: {
       type: [String], // federated user IDs
       default: []
-      // example: "bob@food", "alice@sports"
     },
 
     comments: {
-      type: [String],
+      type: [
+        {
+          displayName: {
+            type: String,
+            required: true
+          },
+
+          image: {
+            type: String,
+            default: null
+          },
+
+          content: {
+            type: String,
+            required: true,
+            maxlength: 500
+          },
+
+          createdAt: {
+            type: Date,
+            default: Date.now
+          }
+        }
+      ],
       default: []
-    }
+    },
   },
   {
     timestamps: true
@@ -105,21 +127,11 @@ const postSchema = new mongoose.Schema(
 
 /* ========= INDEXES ========= */
 
-postSchema.index({ serverName: 1, createdAt: -1 });
+// postSchema.index({ serverName: 1, createdAt: -1 });
 
-postSchema.index({ originServer: 1 });
+// postSchema.index({ originServer: 1 });
 
-postSchema.index({ likedBy: 1 });
-
-if (isUserPost) {
-  isChannelPost = false;
-  channelName = null;
-}
-
-if (isChannelPost) {
-  isUserPost = false;
-  userDisplayName = null;
-}
+// postSchema.index({ likedBy: 1 });
 
 
-module.exports = mongoose.model("Post", postSchema);
+export default mongoose.model("Post", postSchema);

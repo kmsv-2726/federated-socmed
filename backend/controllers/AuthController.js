@@ -28,7 +28,11 @@ export const loginUser = async (req, res, next) => {
       {
         userId: user._id,
         server: process.env.SERVER_NAME,
-        role: user.role
+        role: user.role,
+        serverName: user.serverName, 
+        federatedId: user.federatedId,
+        displayName: user.displayName,
+        image: user.image
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
@@ -40,9 +44,11 @@ export const loginUser = async (req, res, next) => {
       user: {
         id: user._id,
         displayName: user.displayName,
+        image: user.image,
         email: user.email,
         role: user.role,
-        federatedId: user.federatedId
+        federatedId: user.federatedId,
+        serverName: user.serverName
       }
     });
   } catch (err) {
@@ -91,7 +97,11 @@ export const registerUser = async (req, res, next) => {
       {
         userId: newUser._id,
         server: process.env.SERVER_NAME,
-        role: newUser.role
+        role: newUser.role,
+        serverName: newUser.serverName,
+        federatedId: newUser.federatedId,
+        displayName: newUser.displayName,
+        image: null
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
@@ -105,7 +115,9 @@ export const registerUser = async (req, res, next) => {
         displayName: newUser.displayName,
         email: newUser.email,
         role: newUser.role,
-        federatedId: newUser.federatedId
+        federatedId: newUser.federatedId,
+        serverName: newUser.serverName,
+        image: null
       }
     });
   } catch (err) {

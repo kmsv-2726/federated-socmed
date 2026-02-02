@@ -99,20 +99,20 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-/* ===== INDEXES ===== */
+// /* ===== INDEXES ===== */
 
-userSchema.index(
-  { displayName: 1, serverName: 1 },
-  { unique: true }
-);
+// userSchema.index(
+//   { displayName: 1, serverName: 1 },
+//   { unique: true }
+// );
 
-userSchema.index(
-  { email: 1, serverName: 1 },
-  { unique: true }
-);
+// userSchema.index(
+//   { email: 1, serverName: 1 },
+//   { unique: true }
+// );
 
-userSchema.index({ federatedId: 1 });
-userSchema.index({ followers: 1 });
-userSchema.index({ following: 1 });
+// userSchema.index({ federatedId: 1 });
+// userSchema.index({ followers: 1 });
+// userSchema.index({ following: 1 });
 
 export default mongoose.model("User", userSchema);
