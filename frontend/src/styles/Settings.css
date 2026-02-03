@@ -115,6 +115,8 @@
 .form-group input,
 .form-group select {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 10px 14px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;

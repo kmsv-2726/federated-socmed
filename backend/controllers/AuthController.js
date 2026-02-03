@@ -29,7 +29,7 @@ export const loginUser = async (req, res, next) => {
         userId: user._id,
         server: process.env.SERVER_NAME,
         role: user.role,
-        serverName: user.serverName, 
+        serverName: user.serverName,
         federatedId: user.federatedId,
         displayName: user.displayName,
         image: user.image
@@ -59,7 +59,7 @@ export const loginUser = async (req, res, next) => {
 export const registerUser = async (req, res, next) => {
   try {
     const {
-      displayName,firstName,middleName,lastName,dob,email,password} = req.body;
+      displayName, firstName, middleName, lastName, dob, email, password } = req.body;
 
     if (
       !displayName || !firstName || !lastName || !dob || !email || !password

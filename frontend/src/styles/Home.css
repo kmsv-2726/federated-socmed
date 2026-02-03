@@ -18,8 +18,8 @@ body {
 }
 
 .app {
-    margin: 0;
-    min-height: 100vh;
+  margin: 0;
+  min-height: 100vh;
 }
 
 .container {
@@ -54,7 +54,8 @@ body {
   text-transform: uppercase;
 }
 
-.main-nav, .favorites-nav {
+.main-nav,
+.favorites-nav {
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -136,6 +137,8 @@ body {
 
 .search-bar input {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 12px 16px;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
@@ -259,7 +262,8 @@ body {
   padding-bottom: 20px;
 }
 
-.loading-state, .empty-state {
+.loading-state,
+.empty-state {
   text-align: center;
   padding: 60px 20px;
   color: #9ca3af;
@@ -405,7 +409,10 @@ body {
   margin-bottom: 12px;
 }
 
-.event-item, .chat-item, .contact-item, .person {
+.event-item,
+.chat-item,
+.contact-item,
+.person {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -413,7 +420,10 @@ body {
   font-size: 13px;
 }
 
-.event-icon, .chat-avatar, .contact-avatar, .person-avatar {
+.event-icon,
+.chat-avatar,
+.contact-avatar,
+.person-avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -441,12 +451,14 @@ body {
   border-radius: 50%;
 }
 
-.event-name, .person-name {
+.event-name,
+.person-name {
   font-weight: 500;
   color: #111827;
 }
 
-.event-details, .person-detail {
+.event-details,
+.person-detail {
   font-size: 11px;
   color: #9ca3af;
   margin-top: 2px;
@@ -464,7 +476,8 @@ body {
   margin-bottom: 16px;
 }
 
-.chat-item, .contact-item {
+.chat-item,
+.contact-item {
   cursor: pointer;
   border-radius: 8px;
   padding: 8px;
@@ -472,7 +485,8 @@ body {
   transition: background 0.2s;
 }
 
-.chat-item:hover, .contact-item:hover {
+.chat-item:hover,
+.contact-item:hover {
   background: #f3f4f6;
 }
 
@@ -508,8 +522,9 @@ body {
   .container {
     grid-template-columns: 1fr;
   }
-  
-  .left-sidebar, .right-sidebar {
+
+  .left-sidebar,
+  .right-sidebar {
     display: none;
   }
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import Layout from '../components/Layout';
+import Layout from '../Layout';
 import {
   FiServer,
   FiInfo,
@@ -7,20 +7,21 @@ import {
   FiShield,
   FiAlertCircle
 } from 'react-icons/fi';
-import '../styles/ServerDetails.css';
+import '../../styles/ServerDetails.css';
 
 function ServerDetails() {
   const server = {
-    name: 'Connected Main Server',
+    name: 'Food Community Server',
     description:
-      'This is the primary community server for Connected. All general discussions, updates, and public channels are hosted here.',
-    admin: 'Admin_01 (Ben Goro)',
+      'A vibrant community for food lovers! Share recipes, restaurant reviews, cooking tips, and culinary adventures. Connect with fellow foodies from around the world.',
+    admin: 'Nutzz',
     rules: [
-      'Be respectful to all members.',
-      'No hate speech, harassment, or bullying.',
-      'Do not spam or post malicious links.',
-      'Follow channel-specific guidelines.',
-      'Admins reserve the right to moderate content.'
+      'Be respectful and supportive of all cooking skill levels.',
+      'Share original recipes and give credit when using others.',
+      'No spam or promotional content without approval.',
+      'Keep discussions food-related and family-friendly.',
+      'Constructive criticism only - no food shaming!',
+      'Tag posts with dietary info (vegan, gluten-free, etc.) when applicable.'
     ]
   };
 

@@ -76,6 +76,18 @@ function Home() {
     }
   };
 
+  const getFilteredPosts = () => {
+    switch (activeTimeline) {
+      case 'home':
+      case 'local':
+        return posts;
+      case 'federated':
+        return []; // to change later when we integrate federation
+      default:
+        return posts;
+    }
+  };
+
   return (
     <Layout>
       <div className="search-bar">
@@ -95,7 +107,7 @@ function Home() {
         <div className="empty-state" style={{ color: '#dc2626' }}>{error}</div>
       ) : (
         <PostList
-          posts={posts}
+          posts={getFilteredPosts()}
           onLike={handleLikePost}
           activeTimeline={activeTimeline}
         />

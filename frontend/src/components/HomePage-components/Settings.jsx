@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import Layout from '../components/Layout';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Layout from '../Layout';
 import {
   FiUser,
   FiMail,
@@ -15,20 +16,34 @@ import {
   FiSave,
   FiAlertTriangle
 } from 'react-icons/fi';
-import '../styles/Settings.css';
+import '../../styles/Settings.css';
 
 function Settings() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('account');
   const [showPassword, setShowPassword] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  // Form state
+  const getUserData = () => {
+    const user = localStorage.getItem('user');
+    if (user) {
+      try {
+        return JSON.parse(user);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const user = getUserData();
+
   const [formData, setFormData] = useState({
-    username: 'bengoro',
-    name: 'Ben Goro',
-    email: 'ben.goro@example.com',
-    phone: '+1 (555) 123-4567',
-    dob: '1995-06-15',
+    username: user?.displayName || '',
+    name: user?.displayName || '',
+    email: user?.email || '',
+    phone: '',
+    dob: '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
@@ -92,9 +107,9 @@ function Settings() {
   };
 
   const handleLogout = () => {
-    console.log('Logging out');
-    // Clear session and redirect
-    alert('Logged out successfully!');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/auth');
   };
 
   return (
@@ -106,7 +121,6 @@ function Settings() {
         </div>
 
         <div className="settings-content">
-          {/* Tabs */}
           <div className="settings-tabs">
             <button
               className={`settings-tab ${activeTab === 'account' ? 'active' : ''}`}
@@ -128,12 +142,12 @@ function Settings() {
             </button>
           </div>
 
-          {/* Account Settings */}
+
           {activeTab === 'account' && (
             <div className="settings-panel">
               <div className="settings-section">
                 <h2>Profile Information</h2>
-                
+
                 <div className="form-group">
                   <label>
                     <FiUser className="label-icon" />
@@ -179,20 +193,6 @@ function Settings() {
 
                 <div className="form-group">
                   <label>
-                    <FiPhone className="label-icon" />
-                    Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    placeholder="Enter phone number"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>
                     <FiCalendar className="label-icon" />
                     Date of Birth
                   </label>
@@ -211,7 +211,7 @@ function Settings() {
             </div>
           )}
 
-          {/* Security Settings */}
+
           {activeTab === 'security' && (
             <div className="settings-panel">
               <div className="settings-section">
@@ -284,7 +284,7 @@ function Settings() {
             </div>
           )}
 
-          {/* Privacy Settings */}
+
           {activeTab === 'privacy' && (
             <div className="settings-panel">
               <div className="settings-section">
@@ -375,7 +375,6 @@ function Settings() {
         </div>
       </div>
 
-      {/* Delete Account Modal */}
       {showDeleteModal && (
         <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>

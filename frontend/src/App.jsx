@@ -1,10 +1,10 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AuthPage from './pages/AuthPage';
 import Home from './pages/Home';
-import Profile from './pages/Profile';
-import Channels from './pages/Channels';
-import ServerDetails from './pages/ServerDetails';
-import Settings from './pages/Settings';
+import Profile from './components/HomePage-components/Profile';
+import Channels from './components/HomePage-components/Channels';
+import ServerDetails from './components/HomePage-components/ServerDetails';
+import Settings from './components/HomePage-components/Settings';
 import LandingPage from './pages/LandingPage';
 import './styles/app.css';
 

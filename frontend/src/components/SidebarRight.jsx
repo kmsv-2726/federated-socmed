@@ -2,20 +2,45 @@ import React from 'react';
 import {
   FiUser,
   FiUsers,
-  FiCircle
+  FiCircle,
+  FiCoffee,
+  FiBookOpen
 } from 'react-icons/fi';
-import { FaFutbol, FaCarSide } from 'react-icons/fa';
-import { GiCricketBat } from 'react-icons/gi';
+import { GiCook, GiBread, GiKnifeFork } from 'react-icons/gi';
 
 const SidebarRight = () => {
+  const getUserData = () => {
+    const user = localStorage.getItem('user');
+    if (user) {
+      try {
+        return JSON.parse(user);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const user = getUserData();
+
+  const getInitials = (name) => {
+    if (!name) return '??';
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   return (
     <aside className="right-sidebar">
 
       <div className="user-profile">
         <div className="user-avatar large">
-          <FiUser />
+          {user ? getInitials(user.displayName) : <FiUser />}
         </div>
-        <span>Ben Goro</span>
+        <span>{user?.displayName || 'User'}</span>
       </div>
 
       <div className="widget">
@@ -23,23 +48,23 @@ const SidebarRight = () => {
 
         <div className="chat-item">
           <div className="chat-avatar">
-            <FaFutbol />
+            <GiCook />
           </div>
-          <span>Football</span>
+          <span>Recipes</span>
         </div>
 
         <div className="chat-item">
           <div className="chat-avatar">
-            <GiCricketBat />
+            <GiBread />
           </div>
-          <span>Cricket</span>
+          <span>Baking</span>
         </div>
 
         <div className="chat-item">
           <div className="chat-avatar">
-            <FaCarSide />
+            <GiKnifeFork />
           </div>
-          <span>F1</span>
+          <span>Restaurants</span>
         </div>
       </div>
 
