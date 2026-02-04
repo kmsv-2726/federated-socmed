@@ -5,7 +5,8 @@ import {
   FiUser,
   FiFileText,
   FiSettings,
-  FiServer
+  FiServer,
+  FiLogOut
 } from 'react-icons/fi';
 
 const SidebarLeft = () => {
@@ -18,6 +19,12 @@ const SidebarLeft = () => {
 
   const isActive = (path) => {
     return location.pathname === path;
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/auth');
   };
 
   return (
@@ -54,6 +61,12 @@ const SidebarLeft = () => {
           onClick={() => handleNavClick('/settings')}
         >
           <FiSettings className="icon" /> Settings
+        </button>
+        <button 
+          className="nav-item logout-btn"
+          onClick={handleLogout}
+        >
+          <FiLogOut className="icon" /> Logout
         </button>
       </nav>
     </aside>

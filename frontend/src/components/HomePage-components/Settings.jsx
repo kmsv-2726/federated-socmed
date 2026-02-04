@@ -273,14 +273,6 @@ function Settings() {
                   <FiSave /> Update Password
                 </button>
               </div>
-
-              <div className="settings-section danger-zone">
-                <h2>Session Management</h2>
-                <button className="btn-secondary" onClick={handleLogout}>
-                  <FiLogOut /> Logout
-                </button>
-                <small>Sign out of your account on this device</small>
-              </div>
             </div>
           )}
 
