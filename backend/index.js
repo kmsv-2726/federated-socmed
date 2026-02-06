@@ -4,14 +4,12 @@ import mongoose from "mongoose"
 import cors from "cors"
 import authRoute from "./routes/authRoute.js"
 import postRoute from "./routes/postRoute.js"
-import postRoute from "./routes/postRoute.js"
 import channelRoute from "./routes/channelRoute.js"
 
 dotenv.config()
 
 const app = express()
 
-// Enable CORS for frontend
 app.use(cors({
   origin: ["http://localhost:5173", "http://localhost:3000"],
   credentials: true
