@@ -30,5 +30,4 @@ Hemanth Kumar G T, Sumithra S, Manikanta Sai Vignan
 ## Tasks
 - UI design:
     - Manikanta Sai Vignan: Social media information website with all servers
-- Backend Implementation:
-    - Sreepathy Joshy: User Authentication
+- Backend Implementation
