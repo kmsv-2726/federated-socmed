@@ -1,50 +1,74 @@
 import { createError } from "../utils/error.js";
 import Post from "../models/Post.js";
+import Channel from "../models/Channel.js"; 
 
 export const createPost = async (req, res, next) => {
   try {
-    const { description, image, isChannelPost, channelName, isRemote } = req.body;
+    const { description, image, isChannelPost, channelName } = req.body;
+
     if (!description || description.trim() === "") {
       return next(createError(400, "Post description is required"));
     }
+
     const isUserPost = !isChannelPost;
 
-    if (isChannelPost && !channelName) {
-      return next(createError(400, "Channel name is required for channel posts"));
+    // ===== CHANNEL POST VALIDATION =====
+    let channel = null;
+
+    if (isChannelPost) {
+      if (!channelName) {
+        return next(createError(400, "Channel name is required for channel posts"));
+      }
+
+      channel = await Channel.findOne({ name: channelName });
+      if (!channel) {
+        return next(createError(404, "Channel not found"));
+      }
+
+      // Enforce visibility rules
+      if (channel.visibility === "read-only" && req.user.role !== "admin") {
+        return next(createError(403, "This channel is read-only"));
+      }
+
+      if (channel.visibility === "private") {
+        return next(createError(403, "This channel is private"));
+      }
     }
 
-
-    console.log("Authenticated user:", req.user);
+    // ===== FEDERATED ID =====
     let postFederatedId;
-    if(isChannelPost){
+    if (isChannelPost) {
       postFederatedId = `${channelName}@${req.user.server}/post/${Date.now()}`;
-    }else{
+    } else {
       postFederatedId = `${req.user.federatedId}/post/${Date.now()}`;
     }
 
+    // ===== CREATE POST =====
     const newPost = new Post({
-      description,
+      description: description.trim(),
       image: image || null,
+
       isUserPost,
       userDisplayName: isUserPost ? req.user.displayName : null,
+
       isChannelPost: !!isChannelPost,
       channelName: isChannelPost ? channelName : null,
+
       federatedId: postFederatedId,
       originServer: req.user.server,
       serverName: req.user.server,
+
       isRemote: false,
       federationStatus: "local",
-      federatedTo: [],
+      federatedTo: []
     });
 
     const savedPost = await newPost.save();
-    
-    res.status(200).json({
+
+    res.status(201).json({
       success: true,
       post: savedPost
     });
-
-    // federatePost(savedPost, req.user.followers);
 
   } catch (err) {
     next(err);

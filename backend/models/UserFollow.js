@@ -21,9 +21,9 @@ const userFollowSchema = new mongoose.Schema(
 );
 
 // Prevent duplicate follows
-userFollowSchema.index(
-  { followerFederatedId: 1, followingFederatedId: 1 },
-  { unique: true }
-);
+// userFollowSchema.index(
+//   { followerFederatedId: 1, followingFederatedId: 1 },
+//   { unique: true }
+// );
 
 export default mongoose.model("UserFollow", userFollowSchema);
