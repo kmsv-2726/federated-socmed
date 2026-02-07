@@ -19,7 +19,7 @@ const reportSchema = new mongoose.Schema(
         targetType: {
             type: String,
             required: true,
-            enum: ["user", "post", "channel"],
+            enum: ["user", "post"],
             default: "user"
         },
 

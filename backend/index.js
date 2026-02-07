@@ -5,6 +5,7 @@ import authRoute from "./routes/authRoute.js"
 import postRoute from "./routes/postRoute.js"
 import channelRoute from "./routes/channelRoute.js"
 import userRoute from "./routes/userRoute.js"
+import reportRoute from "./routes/reportRoute.js"
 
 dotenv.config()
 
@@ -25,6 +26,7 @@ app.use("/api/auth", authRoute)
 app.use("/api/posts", postRoute)
 app.use("/api/user", userRoute)
 app.use("/api/channels", channelRoute)
+app.use("/api/reports", reportRoute)
 
 app.use((err,req,res,next)=>{
     const errorStatus = err.status || 500
