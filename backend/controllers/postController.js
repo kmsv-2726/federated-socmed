@@ -1,6 +1,5 @@
 import { createError } from "../utils/error.js";
 import Post from "../models/Post.js";
-import { use } from "react";
 
 export const createPost = async (req, res, next) => {
   try {

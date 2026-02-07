@@ -63,14 +63,16 @@ const userSchema = new mongoose.Schema(
 
     /* ===== SOCIAL GRAPH ===== */
 
-    followers: {
-      type: [String], 
-      default: []
+    followersCount: {
+      type: Number,
+      default: 0,
+      min: 0
     },
 
-    following: {
-      type: [String], 
-      default: []
+    followingCount: {
+      type: Number,
+      default: 0,
+      min: 0
     },
 
     /* ===== AUTH & STATUS ===== */
