@@ -96,7 +96,8 @@
 }
 
 .btn-join,
-.btn-request {
+.btn-request,
+.btn-following {
   width: 100%;
   padding: 8px 16px;
   border: none;
@@ -117,6 +118,15 @@
   background: #4f46e5;
 }
 
+.btn-following {
+  background: #10b981;
+  color: white;
+}
+
+.btn-following:hover {
+  background: #059669;
+}
+
 .btn-request {
   background: #f3f4f6;
   color: #374151;
@@ -125,6 +135,25 @@
 
 .btn-request:hover {
   background: #e5e7eb;
+}
+
+.channel-description {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #9ca3af;
+}
+
+.error-message {
+  color: #ef4444;
+  text-align: center;
+  padding: 20px;
 }
 
 @media (max-width: 768px) {
