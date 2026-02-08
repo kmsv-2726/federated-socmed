@@ -94,7 +94,7 @@ const ServerCard = ({ server }) => {
                 </p>
 
                 {server.enabled ? (
-                    <button style={{
+                    <a href="/auth" style={{
                         width: '100%',
                         padding: '10px',
                         backgroundColor: 'var(--primary)',
@@ -105,13 +105,17 @@ const ServerCard = ({ server }) => {
                         fontWeight: '600',
                         cursor: 'pointer',
                         transition: 'background-color 0.2s',
-                        height: '40px'
+                        height: '40px',
+                        textDecoration: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
                     }}
                         onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--primary-hover)'}
                         onMouseLeave={(e) => e.target.style.backgroundColor = 'var(--primary)'}
                     >
                         Join Server
-                    </button>
+                    </a>
                 ) : (
                     <div style={{
                         textAlign: 'center',

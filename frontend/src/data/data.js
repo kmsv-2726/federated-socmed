@@ -14,12 +14,30 @@ export const categories = [
 
 export const servers = [
     {
+        id: 11,
+        name: 'food',
+        category: 'food',
+        description: 'Share recipes, restaurant recommendations, and connect with fellow food lovers.',
+        enabled: true,
+        users: '95K+',
+        image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
+    },
+    {
+        id: 12,
+        name: 'sports',
+        category: 'sports',
+        description: 'Discuss your favorite sports, teams, and athletic adventures with fans worldwide.',
+        enabled: false,
+        users: 'Coming Soon',
+        image: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
+    },
+    {
         id: 1,
         name: 'community.hub',
         category: 'general',
         description: 'The main community server — a welcoming space for everyone to connect and share.',
-        enabled: true,
-        users: '850K+',
+        enabled: false,
+        users: 'Coming Soon',
         image: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
     },
     {
@@ -27,8 +45,8 @@ export const servers = [
         name: 'techhub.social',
         category: 'technology',
         description: 'A hub primarily for passionate technologists, but everyone is welcome.',
-        enabled: true,
-        users: '120K+',
+        enabled: false,
+        users: 'Coming Soon',
         image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
     },
     {
@@ -102,23 +120,5 @@ export const servers = [
         enabled: false,
         users: '???',
         image: ''
-    },
-    {
-        id: 11,
-        name: 'food',
-        category: 'food',
-        description: 'Share recipes, restaurant recommendations, and connect with fellow food lovers.',
-        enabled: true,
-        users: '95K+',
-        image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
-    },
-    {
-        id: 12,
-        name: 'sports',
-        category: 'sports',
-        description: 'Discuss your favorite sports, teams, and athletic adventures with fans worldwide.',
-        enabled: true,
-        users: '180K+',
-        image: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
     },
 ];

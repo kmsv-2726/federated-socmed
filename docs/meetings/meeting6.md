@@ -15,8 +15,7 @@ Sumithra S, Sreepathy Joshy, Ragul C V, Manikanta Sai Vignan
 ---
 
 ## Work Completed
-- Frontend/Backend integration completed for channel creation, channels display
-- Admin dashboard frontend completed
+- Frontend/Backend integration completed for channel creation, channels display, delete channel, edit channel- Admin dashboard frontend completed
 - Servers page frontend completed (+ navigation from landing page)
 
 ---
