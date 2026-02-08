@@ -31,6 +31,16 @@ const Admin = () => {
   const [editingChannel, setEditingChannel] = useState(null);
   const [editFormData, setEditFormData] = useState({ description: '', rules: '' });
 
+  // Modal state for creating channels
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createFormData, setCreateFormData] = useState({
+    name: '',
+    description: '',
+    rules: '',
+    visibility: 'public',
+    image: ''
+  });
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -166,6 +176,38 @@ const Admin = () => {
     } catch (err) {
       console.error('Error updating channel:', err);
       alert('Failed to update channel.');
+    }
+  };
+
+  const handleCreateChannel = async (e) => {
+    e.preventDefault();
+    if (!createFormData.name.trim()) {
+      alert('Channel name is required.');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('token');
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+
+      const rulesArray = createFormData.rules.split('\n').filter(r => r.trim() !== '');
+
+      const response = await axios.post(`${API_BASE_URL}/channels`, {
+        name: createFormData.name.trim(),
+        description: createFormData.description,
+        rules: rulesArray,
+        visibility: createFormData.visibility,
+        image: createFormData.image
+      }, config);
+
+      if (response.data.success) {
+        setChannelsList(prev => [...prev, response.data.channel]);
+        setCreateModalOpen(false);
+        setCreateFormData({ name: '', description: '', rules: '', visibility: 'public', image: '' });
+        alert('Channel created successfully!');
+      }
+    } catch (err) {
+      console.error('Error creating channel:', err);
+      alert(err.response?.data?.message || 'Failed to create channel.');
     }
   };
 
@@ -493,7 +535,7 @@ const Admin = () => {
             <div className="admin-section">
               <div className="section-header">
                 <h2 className="section-h2">All Channels</h2>
-                <button className="primary-btn" onClick={() => alert('Create channel feature coming soon.')}>Create New Channel</button>
+                <button className="primary-btn" onClick={() => setCreateModalOpen(true)}>Create New Channel</button>
               </div>
               <table className="admin-table">
                 <thead>
@@ -652,6 +694,67 @@ const Admin = () => {
               <div className="modal-actions">
                 <button type="button" className="action-btn-sm" onClick={() => setEditModalOpen(false)}>Cancel</button>
                 <button type="submit" className="primary-btn">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Channel Modal */}
+      {createModalOpen && (
+        <div className="modal-overlay" onClick={() => setCreateModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Create New Channel</h2>
+            <form onSubmit={handleCreateChannel}>
+              <div className="form-group">
+                <label>Channel Name *</label>
+                <input
+                  type="text"
+                  value={createFormData.name}
+                  onChange={(e) => setCreateFormData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g., recipes, sports-news"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Description</label>
+                <textarea
+                  value={createFormData.description}
+                  onChange={(e) => setCreateFormData(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Channel description..."
+                />
+              </div>
+              <div className="form-group">
+                <label>Rules (one per line)</label>
+                <textarea
+                  value={createFormData.rules}
+                  onChange={(e) => setCreateFormData(prev => ({ ...prev, rules: e.target.value }))}
+                  placeholder="Enter rules, one per line..."
+                  rows={4}
+                />
+              </div>
+              <div className="form-group">
+                <label>Visibility</label>
+                <select
+                  value={createFormData.visibility}
+                  onChange={(e) => setCreateFormData(prev => ({ ...prev, visibility: e.target.value }))}
+                >
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Image URL (optional)</label>
+                <input
+                  type="text"
+                  value={createFormData.image}
+                  onChange={(e) => setCreateFormData(prev => ({ ...prev, image: e.target.value }))}
+                  placeholder="https://example.com/image.jpg"
+                />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="action-btn-sm" onClick={() => setCreateModalOpen(false)}>Cancel</button>
+                <button type="submit" className="primary-btn">Create Channel</button>
               </div>
             </form>
           </div>

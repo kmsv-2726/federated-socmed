@@ -5,9 +5,9 @@ import ChannelFollow from "../models/ChannelFollow.js";
 
 export const createChannel = async (req, res, next) => {
     try {
-        const { name, description, rules, visibility, image, followers } = req.body;
-        if (!name || !description || !rules || !visibility || !image) {
-            return next(createError(400, "Missing required fields"));
+        const { name, description, rules, visibility = 'public', image } = req.body;
+        if (!name || !description || !rules) {
+            return next(createError(400, "Missing required fields: name, description, and rules are required"));
         }
 
         const federatedId = `${name}@${req.user.server}`;
@@ -17,7 +17,7 @@ export const createChannel = async (req, res, next) => {
             description,
             rules,
             visibility,
-            image,
+            image: image || null,
             federatedId,
             originServer: req.user.server,
             serverName: req.user.server,

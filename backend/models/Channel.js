@@ -13,10 +13,10 @@ const channelSchema = new mongoose.Schema(
       immutable: true
     },
 
-    image:{
-        type: String,
-        required: true,
-        default: null
+    image: {
+      type: String,
+      required: false,
+      default: null
     },
 
     description: {
