@@ -210,7 +210,8 @@ const AuthPage = () => {
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
         setSuccess("Login successful! Redirecting...");
-        setTimeout(() => navigate("/"), 500);
+        const redirectPath = data.user.role === 'admin' ? '/admin' : '/';
+        setTimeout(() => navigate(redirectPath), 500);
       } else {
         setError(data.message || "Login failed");
       }

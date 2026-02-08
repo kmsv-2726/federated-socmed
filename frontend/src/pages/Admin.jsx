@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
   FiGrid, FiUsers, FiHash, FiMessageCircle, FiShield,
   FiList, FiSlash, FiLock, FiServer, FiTrendingUp,
-  FiTrendingDown, FiEdit2, FiFileText, FiActivity
+  FiTrendingDown, FiEdit2, FiFileText, FiActivity, FiLogOut
 } from 'react-icons/fi';
 import '../styles/Admin.css';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 
 const Admin = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [stats, setStats] = useState({
     users: 12459,
@@ -208,6 +210,20 @@ const Admin = () => {
             >
               <FiServer />
               <span>Server Info</span>
+            </div>
+
+            <div className="admin-nav-section">Account</div>
+
+            <div
+              className="admin-nav-item logout-btn"
+              onClick={() => {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                navigate('/auth');
+              }}
+            >
+              <FiLogOut />
+              <span>Logout</span>
             </div>
           </nav>
         </aside>

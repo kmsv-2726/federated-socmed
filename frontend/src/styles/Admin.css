@@ -257,6 +257,11 @@
     background: #4f46e5;
 }
 
+.logout-btn:hover {
+    background: #ef4444 !important;
+    color: white;
+}
+
 @media (max-width: 768px) {
     .admin-container {
         grid-template-columns: 1fr;
