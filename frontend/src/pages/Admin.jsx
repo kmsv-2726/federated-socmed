@@ -1,134 +1,174 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import {
-  FiGrid, FiUsers, FiHash, FiMessageCircle, FiShield,
-  FiList, FiSlash, FiLock, FiServer, FiTrendingUp,
-  FiTrendingDown, FiEdit2, FiFileText, FiActivity, FiLogOut
-} from 'react-icons/fi';
 import '../styles/Admin.css';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = "http://localhost:5000/api";
 
 const Admin = () => {
-  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [stats, setStats] = useState({
-    users: 12459,
-    posts: 1847,
-    reports: 23,
-    engagement: 68
+    users: 0,
+    posts: 0,
+    reports: 0,
+    engagement: 0 // Still simulated as per requirement
   });
 
-  // Channel state
-  const [channels, setChannels] = useState([]);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newChannel, setNewChannel] = useState({
-    name: '',
-    description: '',
-    visibility: 'public',
-    rules: '',
-    image: ''
-  });
-  const [channelLoading, setChannelLoading] = useState(false);
-  const [channelError, setChannelError] = useState('');
+  const [usersList, setUsersList] = useState([]);
+  const [channelsList, setChannelsList] = useState([]);
+  const [reportsList, setReportsList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Fetch channels when channels tab is active
   useEffect(() => {
-    if (activeTab === 'channels') {
-      fetchChannels();
-    }
-  }, [activeTab]);
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const token = localStorage.getItem('token');
+        const config = {
+          headers: { Authorization: `Bearer ${token}` }
+        };
 
-  const fetchChannels = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_BASE_URL}/channels`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (response.data.success) {
-        setChannels(response.data.channels);
+        // Fetch all required data in parallel
+        const [usersRes, postsRes, channelsRes, reportsRes] = await Promise.allSettled([
+          axios.get(`${API_BASE_URL}/users`, config),
+          axios.get(`${API_BASE_URL}/posts`, config),
+          axios.get(`${API_BASE_URL}/channels`, config),
+          axios.get(`${API_BASE_URL}/reports?limit=100`, config) // Increased limit for admin view
+        ]);
+
+        let usedMock = false;
+        let newStats = { ...stats };
+
+        // Process Users
+        if (usersRes.status === 'fulfilled') {
+          setUsersList(usersRes.value.data.users || []);
+          newStats.users = usersRes.value.data.users.length;
+        } else {
+          // Fallback to mock data
+          usedMock = true;
+        }
+
+        // Process Posts (for stats only)
+        if (postsRes.status === 'fulfilled') {
+          // utilizing getAllPosts endpoint to get count
+          newStats.posts = postsRes.value.data.posts.length;
+        }
+
+        // Process Channels
+        if (channelsRes.status === 'fulfilled') {
+          setChannelsList(channelsRes.value.data.channels || []);
+        }
+
+        // Process Reports
+        if (reportsRes.status === 'fulfilled') {
+          const reports = reportsRes.value.data.reports || [];
+          setReportsList(reports);
+          // Count active (pending) reports
+          const activeReports = reports.filter(r => r.status === 'pending').length;
+          newStats.reports = activeReports;
+        }
+
+        if (usedMock || usersRes.status === 'rejected' || postsRes.status === 'rejected') {
+          throw new Error("Backend unavailable, switching to mock data");
+        }
+
+        setStats(prev => ({ ...prev, ...newStats }));
+
+      } catch (err) {
+        console.warn("Backend unavailable or error fetching data. Loading mock data for demonstration.");
+
+        // MOCK DATA FALLBACK
+        // MOCK DATA FALLBACK
+        // Setting to 0 as requested since backend is offline and no real data exists
+        setStats({
+          users: 0,
+          posts: 0,
+          reports: 0,
+          engagement: 0
+        });
+
+        setUsersList([]);
+        setChannelsList([]);
+        setReportsList([]);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Failed to fetch channels:', err);
-    }
-  };
+    };
 
-  const handleCreateChannel = async (e) => {
-    e.preventDefault();
-    setChannelLoading(true);
-    setChannelError('');
+    fetchData();
+  }, []); // Run once on mount
 
-    try {
-      const token = localStorage.getItem('token');
-      const channelData = {
-        name: newChannel.name,
-        description: newChannel.description,
-        visibility: newChannel.visibility,
-        rules: newChannel.rules.split(',').map(r => r.trim()).filter(r => r),
-        image: newChannel.image || 'https://images.unsplash.com/photo-1557683316-973673baf926?w=400'
-      };
-
-      const response = await axios.post(`${API_BASE_URL}/channels`, channelData, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (response.data.success) {
-        setShowCreateModal(false);
-        setNewChannel({ name: '', description: '', visibility: 'public', rules: '', image: '' });
-        fetchChannels();
-        alert('Channel created successfully!');
-      }
-    } catch (err) {
-      setChannelError(err.response?.data?.message || 'Failed to create channel');
-    } finally {
-      setChannelLoading(false);
-    }
-  };
-
-  const handleDeleteChannel = async (channelId) => {
-    if (!window.confirm('Are you sure you want to delete this channel?')) return;
-
-    try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`${API_BASE_URL}/channels/${channelId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      fetchChannels();
-      alert('Channel deleted successfully!');
-    } catch (err) {
-      alert('Failed to delete channel');
-    }
-  };
-
-  // Simulate real-time updates
+  // Simulate real-time engagement updates
   useEffect(() => {
     const interval = setInterval(() => {
-      if (Math.random() > 0.7) {
-        setStats(prev => ({
-          ...prev,
-          reports: prev.reports + (Math.random() > 0.5 ? 1 : -1)
-        }));
-      }
+      setStats(prev => ({
+        ...prev,
+        engagement: Math.floor(Math.random() * 20) + 50 // Random 50-70%
+      }));
     }, 5000);
     return () => clearInterval(interval);
   }, []);
 
   const manageUser = (username) => {
+    // Placeholder for user management actions
     alert(`Managing user: ${username}\n\nOptions:\n- Edit profile\n- Suspend account\n- Delete account\n- View activity`);
   };
 
-  const reviewReport = (reportId) => {
-    alert(`Reviewing report: ${reportId}\n\nActions available:\n- Approve\n- Reject\n- Take action\n- Request more info`);
+  const reviewReport = async (reportId, action) => {
+    if (!action) {
+      alert(`Reviewing report: ${reportId}\n\nActions available: Approve, Reject`);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const status = action === 'dismiss' ? 'dismissed' : 'resolved';
+
+      await axios.put(`${API_BASE_URL}/reports/${reportId}/status`, { status }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      // Update local state
+      setReportsList(prev => prev.map(r =>
+        r._id === reportId ? { ...r, status: status } : r
+      ));
+
+      // Update stats if resolving a pending report
+      const report = reportsList.find(r => r._id === reportId);
+      if (report && report.status === 'pending') {
+        setStats(prev => ({ ...prev, reports: Math.max(0, prev.reports - 1) }));
+      }
+
+      alert(`Report ${reportId} marked as ${status}`);
+
+    } catch (err) {
+      console.error("Error updating report:", err);
+      alert("Failed to update report status");
+    }
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString();
   };
+
+  const formatTimeAgo = (dateString) => {
+    if (!dateString) return '';
+    const seconds = Math.floor((new Date() - new Date(dateString)) / 1000);
+    let interval = seconds / 31536000;
+    if (interval > 1) return Math.floor(interval) + " years ago";
+    interval = seconds / 2592000;
+    if (interval > 1) return Math.floor(interval) + " months ago";
+    interval = seconds / 86400;
+    if (interval > 1) return Math.floor(interval) + " days ago";
+    interval = seconds / 3600;
+    if (interval > 1) return Math.floor(interval) + " hours ago";
+    interval = seconds / 60;
+    if (interval > 1) return Math.floor(interval) + " mins ago";
+    return Math.floor(seconds) + " seconds ago";
+  };
+
+  if (loading) return <div className="admin-loading">Loading Admin Dashboard...</div>;
 
   return (
     <div className="admin-wrapper">
@@ -136,7 +176,7 @@ const Admin = () => {
         {/* Sidebar */}
         <aside className="admin-sidebar">
           <div className="admin-logo">
-            <FiShield size={24} />
+            <span>🛡️</span>
             <span>Admin Portal</span>
           </div>
 
@@ -145,28 +185,28 @@ const Admin = () => {
               className={`admin-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
               onClick={() => setActiveTab('dashboard')}
             >
-              <FiGrid />
+              <span>📊</span>
               <span>Dashboard</span>
             </div>
             <div
               className={`admin-nav-item ${activeTab === 'users' ? 'active' : ''}`}
               onClick={() => setActiveTab('users')}
             >
-              <FiUsers />
+              <span>👥</span>
               <span>Users</span>
             </div>
             <div
               className={`admin-nav-item ${activeTab === 'channels' ? 'active' : ''}`}
               onClick={() => setActiveTab('channels')}
             >
-              <FiHash />
+              <span>📺</span>
               <span>Channels</span>
             </div>
             <div
               className={`admin-nav-item ${activeTab === 'reports' ? 'active' : ''}`}
               onClick={() => setActiveTab('reports')}
             >
-              <FiMessageCircle />
+              <span>💬</span>
               <span>Reports</span>
             </div>
 
@@ -176,21 +216,22 @@ const Admin = () => {
               className={`admin-nav-item ${activeTab === 'moderation' ? 'active' : ''}`}
               onClick={() => setActiveTab('moderation')}
             >
-              <FiShield />
+              <span>🛡️</span>
               <span>Moderation</span>
             </div>
+            {/* Adding Queue Item as requested */}
             <div
               className={`admin-nav-item ${activeTab === 'queue' ? 'active' : ''}`}
               onClick={() => setActiveTab('queue')}
             >
-              <FiList />
+              <span>📋</span>
               <span>Queue</span>
             </div>
             <div
               className={`admin-nav-item ${activeTab === 'blocked' ? 'active' : ''}`}
               onClick={() => setActiveTab('blocked')}
             >
-              <FiSlash />
+              <span>🚫</span>
               <span>Blocked Accounts</span>
             </div>
 
@@ -200,7 +241,7 @@ const Admin = () => {
               className={`admin-nav-item ${activeTab === 'security' ? 'active' : ''}`}
               onClick={() => setActiveTab('security')}
             >
-              <FiLock />
+              <span>🔐</span>
               <span>Security</span>
             </div>
 
@@ -208,22 +249,8 @@ const Admin = () => {
               className={`admin-nav-item ${activeTab === 'server' ? 'active' : ''}`}
               onClick={() => setActiveTab('server')}
             >
-              <FiServer />
+              <span>🖥️</span>
               <span>Server Info</span>
-            </div>
-
-            <div className="admin-nav-section">Account</div>
-
-            <div
-              className="admin-nav-item logout-btn"
-              onClick={() => {
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                navigate('/auth');
-              }}
-            >
-              <FiLogOut />
-              <span>Logout</span>
             </div>
           </nav>
         </aside>
@@ -242,274 +269,206 @@ const Admin = () => {
               <div className="dashboard-grid">
                 <div className="stat-card">
                   <div className="stat-header">
-                    <FiUsers />
+                    <span>👥</span>
                     <span>Total Users</span>
                   </div>
                   <div className="stat-value">{stats.users.toLocaleString()}</div>
                   <div className="stat-trend trend-up">
-                    <FiTrendingUp />
-                    <span>12% from last month</span>
+                    <span>↑</span>
+                    <span>Real-time</span>
                   </div>
                 </div>
 
                 <div className="stat-card">
                   <div className="stat-header">
-                    <FiFileText />
-                    <span>Posts Today</span>
+                    <span>📝</span>
+                    <span>Total Posts</span>
                   </div>
                   <div className="stat-value">{stats.posts.toLocaleString()}</div>
                   <div className="stat-trend trend-up">
-                    <FiTrendingUp />
-                    <span>8% from yesterday</span>
+                    <span>↑</span>
+                    <span>Global</span>
                   </div>
                 </div>
 
                 <div className="stat-card">
                   <div className="stat-header">
-                    <FiMessageCircle />
+                    <span>💬</span>
                     <span>Active Reports</span>
                   </div>
                   <div className="stat-value">{stats.reports}</div>
                   <div className="stat-trend trend-down">
-                    <FiTrendingDown />
-                    <span>15% from last week</span>
+                    {/* Placeholder trend */}
+                    <span>↓</span>
+                    <span>Pending Action</span>
                   </div>
                 </div>
 
                 <div className="stat-card">
                   <div className="stat-header">
-                    <FiActivity />
+                    <span>📈</span>
                     <span>Engagement Rate</span>
                   </div>
                   <div className="stat-value">{stats.engagement}%</div>
                   <div className="stat-trend trend-up">
-                    <FiTrendingUp />
-                    <span>5% improvement</span>
+                    <span>↑</span>
+                    <span>Estimated</span>
                   </div>
                 </div>
               </div>
 
-              {/* Recent Users Table */}
+              {/* Recent Users Table (First 5) */}
               <section className="admin-section">
                 <div className="section-header">
                   <h2 className="section-h2">Recent User Registrations</h2>
-                  <button className="action-btn-sm" onClick={() => alert('Viewing all users...')}>View All</button>
+                  <button className="action-btn-sm" onClick={() => setActiveTab('users')}>View All</button>
                 </div>
 
                 <table className="admin-table">
                   <thead>
                     <tr>
                       <th>Username</th>
-                      <th>Email</th>
-                      <th>Joined</th>
+                      <th>Federated ID</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>@alice_wonder</td>
-                      <td>alice@example.com</td>
-                      <td>2 hours ago</td>
-                      <td><button className="action-btn-sm" onClick={() => manageUser('@alice_wonder')}>Manage</button></td>
-                    </tr>
-                    <tr>
-                      <td>@bob_builder</td>
-                      <td>bob@example.com</td>
-                      <td>5 hours ago</td>
-                      <td><button className="action-btn-sm" onClick={() => manageUser('@bob_builder')}>Manage</button></td>
-                    </tr>
-                    <tr>
-                      <td>@charlie_dev</td>
-                      <td>charlie@example.com</td>
-                      <td>1 day ago</td>
-                      <td><button className="action-btn-sm" onClick={() => manageUser('@charlie_dev')}>Manage</button></td>
-                    </tr>
-                    <tr>
-                      <td>@diana_designs</td>
-                      <td>diana@example.com</td>
-                      <td>1 day ago</td>
-                      <td><button className="action-btn-sm" onClick={() => manageUser('@diana_designs')}>Manage</button></td>
-                    </tr>
-                    <tr>
-                      <td>@eve_security</td>
-                      <td>eve@example.com</td>
-                      <td>2 days ago</td>
-                      <td><button className="action-btn-sm" onClick={() => manageUser('@eve_security')}>Manage</button></td>
-                    </tr>
+                    {usersList.slice(0, 5).map(user => (
+                      <tr key={user._id || user.federatedId}>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            {user.avatarUrl && <img src={user.avatarUrl} alt="" style={{ width: '24px', height: '24px', borderRadius: '50%' }} />}
+                            {user.displayName}
+                          </div>
+                        </td>
+                        <td>{user.federatedId}</td>
+                        <td><button className="action-btn-sm" onClick={() => manageUser(user.displayName)}>Manage</button></td>
+                      </tr>
+                    ))}
+                    {usersList.length === 0 && <tr><td colSpan="3">No users found.</td></tr>}
                   </tbody>
                 </table>
               </section>
 
-              {/* Moderation Queue */}
+              {/* Recent Reports Table (First 3) */}
               <section className="admin-section">
                 <div className="section-header">
-                  <h2 className="section-h2">Moderation Queue</h2>
-                  <button className="action-btn-sm" onClick={() => alert('Viewing all reports...')}>View All Reports</button>
+                  <h2 className="section-h2">Recent Reports</h2>
+                  <button className="action-btn-sm" onClick={() => setActiveTab('reports')}>View All Reports</button>
                 </div>
 
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Report ID</th>
                       <th>Type</th>
-                      <th>Reported By</th>
+                      <th>Reason</th>
+                      <th>Status</th>
                       <th>Date</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>#RPT-1245</td>
-                      <td>Spam Content</td>
-                      <td>@moderator_01</td>
-                      <td>30 mins ago</td>
-                      <td><button className="action-btn-sm" onClick={() => reviewReport('#RPT-1245')}>Review</button></td>
-                    </tr>
-                    <tr>
-                      <td>#RPT-1244</td>
-                      <td>Harassment</td>
-                      <td>@user_safety</td>
-                      <td>2 hours ago</td>
-                      <td><button className="action-btn-sm" onClick={() => reviewReport('#RPT-1244')}>Review</button></td>
-                    </tr>
-                    <tr>
-                      <td>#RPT-1243</td>
-                      <td>Inappropriate</td>
-                      <td>@moderator_02</td>
-                      <td>5 hours ago</td>
-                      <td><button className="action-btn-sm" onClick={() => reviewReport('#RPT-1243')}>View</button></td>
-                    </tr>
+                    {reportsList.slice(0, 3).map(report => (
+                      <tr key={report._id}>
+                        <td>{report.targetType}</td>
+                        <td>{report.reason}</td>
+                        <td>
+                          <span className={`status-badge ${report.status === 'pending' ? 'status-active' : ''}`} style={{ backgroundColor: report.status === 'resolved' ? '#d1fae5' : report.status === 'dismissed' ? '#f3f4f6' : '#fee2e2', color: report.status === 'resolved' ? '#065f46' : report.status === 'dismissed' ? '#374151' : '#991b1b' }}>
+                            {report.status}
+                          </span>
+                        </td>
+                        <td>{formatTimeAgo(report.createdAt)}</td>
+                        <td>
+                          <button className="action-btn-sm" onClick={() => reviewReport(report._id, 'dismiss')}>Dismiss</button>
+                          <button className="action-btn-sm" style={{ marginLeft: '5px', color: 'green', borderColor: 'green' }} onClick={() => reviewReport(report._id, 'resolve')}>Resolve</button>
+                        </td>
+                      </tr>
+                    ))}
+                    {reportsList.length === 0 && <tr><td colSpan="5">No reports found.</td></tr>}
                   </tbody>
                 </table>
               </section>
             </>
           )}
 
-          {activeTab === 'channels' && (
+          {activeTab === 'users' && (
             <div className="admin-section">
               <div className="section-header">
-                <h2 className="section-h2">All Channels</h2>
-                <button className="primary-btn" onClick={() => setShowCreateModal(true)}>Create New Channel</button>
+                <h2 className="section-h2">All Users</h2>
               </div>
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>Channel Name</th>
-                    <th>Type</th>
-                    <th>Members</th>
-                    <th>Created</th>
-                    <th>Status</th>
+                    <th>Username</th>
+                    <th>Federated ID</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {channels.length > 0 ? (
-                    channels.map(channel => (
-                      <tr key={channel._id}>
-                        <td>#{channel.name}</td>
-                        <td>{channel.visibility === 'public' ? 'Public' : 'Private'}</td>
-                        <td>{channel.followersCount || 0}</td>
-                        <td>{formatDate(channel.createdAt)}</td>
-                        <td><span className="status-badge status-active">Active</span></td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '5px' }}>
-                            <button className="action-btn-sm"><FiEdit2 size={14} /></button>
-                            <button
-                              className="action-btn-sm"
-                              style={{ color: '#ef4444', borderColor: '#fee2e2' }}
-                              onClick={() => handleDeleteChannel(channel._id)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="6" style={{ textAlign: 'center', color: '#9ca3af' }}>
-                        No channels found. Create one to get started!
+                  {usersList.map(user => (
+                    <tr key={user._id || user.federatedId}>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          {user.avatarUrl ? (
+                            <img src={user.avatarUrl} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
+                          ) : (
+                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#ddd' }}></div>
+                          )}
+                          {user.displayName}
+                        </div>
                       </td>
+                      <td>{user.federatedId}</td>
+                      <td><button className="action-btn-sm" onClick={() => manageUser(user.displayName)}>Manage</button></td>
                     </tr>
-                  )}
+                  ))}
                 </tbody>
               </table>
             </div>
           )}
 
-          {/* Create Channel Modal */}
-          {showCreateModal && (
-            <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-              <div className="modal-content" onClick={e => e.stopPropagation()}>
-                <h2>Create New Channel</h2>
-                {channelError && <p className="error-text">{channelError}</p>}
-                <form onSubmit={handleCreateChannel}>
-                  <div className="form-group">
-                    <label>Channel Name</label>
-                    <input
-                      type="text"
-                      value={newChannel.name}
-                      onChange={e => setNewChannel({ ...newChannel, name: e.target.value })}
-                      placeholder="e.g., recipes, announcements"
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Description</label>
-                    <textarea
-                      value={newChannel.description}
-                      onChange={e => setNewChannel({ ...newChannel, description: e.target.value })}
-                      placeholder="What is this channel about?"
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Visibility</label>
-                    <select
-                      value={newChannel.visibility}
-                      onChange={e => setNewChannel({ ...newChannel, visibility: e.target.value })}
-                    >
-                      <option value="public">Public</option>
-                      <option value="private">Private</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Rules (comma-separated)</label>
-                    <input
-                      type="text"
-                      value={newChannel.rules}
-                      onChange={e => setNewChannel({ ...newChannel, rules: e.target.value })}
-                      placeholder="Be respectful, No spam, Stay on topic"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Image URL (optional)</label>
-                    <input
-                      type="text"
-                      value={newChannel.image}
-                      onChange={e => setNewChannel({ ...newChannel, image: e.target.value })}
-                      placeholder="https://example.com/image.jpg"
-                    />
-                  </div>
-                  <div className="modal-actions">
-                    <button type="button" className="action-btn-sm" onClick={() => setShowCreateModal(false)}>
-                      Cancel
-                    </button>
-                    <button type="submit" className="primary-btn" disabled={channelLoading}>
-                      {channelLoading ? 'Creating...' : 'Create Channel'}
-                    </button>
-                  </div>
-                </form>
+          {activeTab === 'channels' && (
+            <div className="admin-section">
+              <div className="section-header">
+                <h2 className="section-h2">All Channels</h2>
+                <button className="primary-btn">Create New Channel</button>
               </div>
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Channel Name</th>
+                    <th>Privacy</th>
+                    <th>Members</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {channelsList.map(channel => (
+                    <tr key={channel._id}>
+                      <td>#{channel.name}</td>
+                      <td style={{ textTransform: 'capitalize' }}>{channel.visibility}</td>
+                      <td>{channel.followersCount}</td>
+                      <td>{formatDate(channel.createdAt)}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '5px' }}>
+                          <button className="action-btn-sm">Edit</button>
+                          <button className="action-btn-sm" style={{ color: '#ef4444', borderColor: '#fee2e2' }}>Archive</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {channelsList.length === 0 && <tr><td colSpan="5">No channels found.</td></tr>}
+                </tbody>
+              </table>
             </div>
           )}
 
-          {/* Queue Tab */}
-          {activeTab === 'queue' && (
+          {/* Combined Report/Queue View Logic */}
+          {(activeTab === 'reports' || activeTab === 'queue' || activeTab === 'moderation') && (
             <section className="admin-section">
               <div className="section-header">
-                <h2 className="section-h2">Review Queue</h2>
-                <button className="action-btn-sm" onClick={() => alert('Viewing all reports...')}>View All Reports</button>
+                <h2 className="section-h2">{activeTab === 'queue' ? 'Moderation Queue' : 'All Reports'}</h2>
+                <button className="action-btn-sm" onClick={() => { }}>Refetch</button>
               </div>
 
               <table className="admin-table">
@@ -517,33 +476,43 @@ const Admin = () => {
                   <tr>
                     <th>Report ID</th>
                     <th>Type</th>
+                    <th>Target</th>
+                    <th>Reason</th>
+                    <th>Status</th>
                     <th>Reported By</th>
                     <th>Date</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td>#RPT-1245</td>
-                    <td>Spam Content</td>
-                    <td>@moderator_01</td>
-                    <td>30 mins ago</td>
-                    <td><button className="action-btn-sm" onClick={() => reviewReport('#RPT-1245')}>Review</button></td>
-                  </tr>
-                  <tr>
-                    <td>#RPT-1244</td>
-                    <td>Harassment</td>
-                    <td>@user_safety</td>
-                    <td>2 hours ago</td>
-                    <td><button className="action-btn-sm" onClick={() => reviewReport('#RPT-1244')}>Review</button></td>
-                  </tr>
-                  <tr>
-                    <td>#RPT-1243</td>
-                    <td>Inappropriate</td>
-                    <td>@moderator_02</td>
-                    <td>5 hours ago</td>
-                    <td><button className="action-btn-sm" onClick={() => reviewReport('#RPT-1243')}>View</button></td>
-                  </tr>
+                  {/* Filter for Queue/Moderation if needed, or show all */}
+                  {reportsList
+                    .filter(r => (activeTab === 'queue' || activeTab === 'moderation') ? r.status === 'pending' : true)
+                    .map(report => (
+                      <tr key={report._id}>
+                        <td>#{report._id.slice(-6)}</td>
+                        <td>{report.targetType}</td>
+                        <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{report.reportedId}</td>
+                        <td>{report.reason}</td>
+                        <td>
+                          <span className={`status-badge ${report.status === 'pending' ? 'status-active' : ''}`} style={{ backgroundColor: report.status === 'resolved' ? '#d1fae5' : report.status === 'dismissed' ? '#f3f4f6' : '#fee2e2', color: report.status === 'resolved' ? '#065f46' : report.status === 'dismissed' ? '#374151' : '#991b1b' }}>
+                            {report.status}
+                          </span>
+                        </td>
+                        <td>{report.reporterId}</td>
+                        <td>{formatTimeAgo(report.createdAt)}</td>
+                        <td>
+                          {report.status === 'pending' && (
+                            <>
+                              <button className="action-btn-sm" onClick={() => reviewReport(report._id, 'dismiss')}>Dismiss</button>
+                              <button className="action-btn-sm" style={{ marginLeft: '5px', color: 'green', borderColor: 'green' }} onClick={() => reviewReport(report._id, 'resolve')}>Resolve</button>
+                            </>
+                          )}
+                          {report.status !== 'pending' && <span style={{ color: '#6b7280', fontSize: '0.8em' }}>Archived</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  {reportsList.length === 0 && <tr><td colSpan="8">No reports found.</td></tr>}
                 </tbody>
               </table>
             </section>
@@ -559,7 +528,7 @@ const Admin = () => {
                 <div className="server-info-content">
                   <h3 style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.05em' }}>Server Name</h3>
                   <div style={{ fontSize: '18px', fontWeight: '600', color: '#111827', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <FiServer size={24} />
+                    <span style={{ fontSize: '24px' }}>🖥️</span>
                     <span>Connected Main Server</span>
                   </div>
                 </div>
@@ -576,6 +545,14 @@ const Admin = () => {
                 </div>
               </section>
             </>
+          )}
+
+          {/* Placeholders for unused tabs */}
+          {(activeTab === 'blocked' || activeTab === 'security') && (
+            <div className="admin-section">
+              <h2>{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Settings</h2>
+              <p>Coming soon...</p>
+            </div>
           )}
 
         </main>
