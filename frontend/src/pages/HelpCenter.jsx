@@ -220,6 +220,17 @@ const HelpCenter = () => {
                             </div>
                         )}
 
+                        <div className="contact-support-cta">
+                            <h3>Still need help?</h3>
+                            <p>Can't find the answer you're looking for? Our support team is here to help.</p>
+                            <button
+                                className="contact-btn"
+                                onClick={() => window.location.href = '/help-center/contact'}
+                            >
+                                Contact Support
+                            </button>
+                        </div>
+
                     </div>
                 </main>
             </div>
