@@ -36,39 +36,47 @@
 
 /* Hero Content */
 .hero-content {
+  padding: 16px 8px;
+  position: relative;
+}
+
+.hero-top-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 16px 0;
+  align-items: flex-end;
+  margin-bottom: 12px;
 }
 
-.hero-content.has-image {
-  margin-top: -40px;
-  padding: 0 16px 16px;
-  position: relative;
-  z-index: 1;
-}
-
-.hero-main {
+.hero-main-info {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 16px;
+  margin-top: -48px;
+  /* Pulls the avatar into the banner */
 }
 
 .channel-avatar-large {
-  width: 72px;
-  height: 72px;
+  width: 84px;
+  height: 84px;
   border-radius: 16px;
   overflow: hidden;
-  border: 3px solid white;
+  border: 4px solid white;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   flex-shrink: 0;
+  background: white;
+  position: relative;
+  z-index: 10;
 }
 
 .channel-avatar-large img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.hero-text {
+  padding-bottom: 4px;
+  /* Align text nicely next to avatar */
 }
 
 .hero-text h1 {
@@ -79,20 +87,11 @@
   text-transform: capitalize;
 }
 
-.hero-text.on-dark h1 {
-  color: white;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-}
-
 .channel-meta {
   font-size: 13px;
   font-weight: 500;
   color: #6b7280;
   margin-bottom: 4px;
-}
-
-.channel-meta.on-dark {
-  color: rgba(255, 255, 255, 0.85);
 }
 
 /* Follow / Join Button */
@@ -142,7 +141,7 @@
 .loading-state,
 .empty-state {
   text-align: center;
-  padding: 60px 20px;
+  padding: 32px 20px;
   color: #9ca3af;
   font-size: 14px;
   background: white;
@@ -160,10 +159,19 @@
     border-radius: 12px;
   }
 
-  .hero-content {
+  .hero-top-row {
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
+    gap: 16px;
+  }
+
+  .hero-main-info {
+    margin-top: -36px;
+  }
+
+  .channel-avatar-large {
+    width: 64px;
+    height: 64px;
   }
 
   .btn-follow-toggle {

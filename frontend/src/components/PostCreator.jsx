@@ -166,17 +166,6 @@ const PostCreator = ({ onPostCreated, isChannelPost = false, channelName = null 
           <button className="action-btn" title="Add link" onClick={() => setShowLinkInput(!showLinkInput)}>
             <FiLink />
           </button>
-
-          <button className="action-btn" title="Add emoji" onClick={() => {
-            if (textareaRef.current) textareaRef.current.focus();
-            // trigger native OS emoji picker: works on most modern browsers
-            if (window.navigator.userAgent.includes('Windows')) {
-              // Simulate Win + . for Windows emoji picker via an input trick
-              document.execCommand('insertText', false, '');
-            }
-          }}>
-            <FiSmile />
-          </button>
         </div>
 
         {showLinkInput && (
