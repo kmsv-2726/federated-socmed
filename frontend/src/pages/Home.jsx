@@ -110,6 +110,7 @@ function Home() {
           posts={getFilteredPosts()}
           onLike={handleLikePost}
           activeTimeline={activeTimeline}
+          onDeletePost={(postId) => setPosts(posts.filter(p => p._id !== postId))}
         />
       )}
     </Layout>

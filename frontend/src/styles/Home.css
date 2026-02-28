@@ -329,6 +329,59 @@ body {
   padding: 4px 8px;
 }
 
+.post-menu-container {
+  position: relative;
+}
+
+.post-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 150px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  text-align: left;
+}
+
+.dropdown-item:hover {
+  background: #f3f4f6;
+}
+
+.dropdown-item.delete-item {
+  color: #dc2626;
+}
+
+.dropdown-item.delete-item:hover {
+  background: #fef2f2;
+}
+
+.dropdown-item.disabled {
+  color: #9ca3af;
+  cursor: default;
+  font-style: italic;
+}
+
+.dropdown-item.disabled:hover {
+  background: none;
+}
+
 .post-content {
   font-size: 14px;
   line-height: 1.6;
