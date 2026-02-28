@@ -149,6 +149,7 @@ function Profile() {
               posts={posts}
               onLike={handleLikePost}
               activeTimeline="profile"
+              onDeletePost={(postId) => setPosts(posts.filter(p => p._id !== postId))}
             />
           )}
         </div>
