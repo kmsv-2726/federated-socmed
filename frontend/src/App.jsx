@@ -8,6 +8,7 @@ import Settings from './components/HomePage-components/Settings';
 import LandingPage from './pages/LandingPage';
 import ServerHome from './pages/serverhome';
 import Admin from './pages/Admin';
+import ChannelPage from './pages/ChannelPage';
 import './styles/app.css';
 
 const isAuthenticated = () => {
@@ -49,6 +50,11 @@ function App() {
             <Route path="/channels" element={
                 <ProtectedRoute>
                     <Channels />
+                </ProtectedRoute>
+            } />
+            <Route path="/channels/:channelName" element={
+                <ProtectedRoute>
+                    <ChannelPage />
                 </ProtectedRoute>
             } />
             <Route path="/server-details" element={

@@ -1,7 +1,73 @@
-import React from 'react';
-import { FiThumbsUp, FiMessageCircle, FiShare2, FiMoreHorizontal } from 'react-icons/fi';
+import React, { useState, useEffect, useRef } from 'react';
+import { FiThumbsUp, FiMessageCircle, FiShare2, FiMoreHorizontal, FiTrash2 } from 'react-icons/fi';
 
-const PostList = ({ posts, onLike, activeTimeline }) => {
+const API_BASE_URL = "http://localhost:5000/api";
+
+const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        setCurrentUser(JSON.parse(userStr));
+      } catch (e) {
+        setCurrentUser(null);
+      }
+    }
+  }, []);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleMenu = (postId) => {
+    setOpenMenuId(openMenuId === postId ? null : postId);
+  };
+
+  const handleDelete = async (postId) => {
+    if (!window.confirm('Are you sure you want to delete this post?')) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/posts/${postId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        if (onDeletePost) {
+          onDeletePost(postId);
+        }
+        setOpenMenuId(null);
+      } else {
+        alert(data.message || 'Failed to delete post');
+      }
+    } catch (err) {
+      console.error('Error deleting post:', err);
+      alert('Failed to delete post. Please try again.');
+    }
+  };
+
+  const isOwnPost = (post) => {
+    if (!currentUser) return false;
+    // Check if the post's federatedId contains the user's federatedId
+    return post.federatedId?.includes(currentUser.federatedId) ||
+      post.userDisplayName === currentUser.displayName;
+  };
+
   const formatTime = (date) => {
     const now = new Date();
     const postDate = new Date(date);
@@ -47,9 +113,26 @@ const PostList = ({ posts, onLike, activeTimeline }) => {
                 <div className="post-time">{formatTime(post.createdAt)}</div>
               </div>
             </div>
-            <button className="post-menu">
-              <FiMoreHorizontal />
-            </button>
+            <div className="post-menu-container" ref={openMenuId === post._id ? menuRef : null}>
+              <button className="post-menu" onClick={() => toggleMenu(post._id)}>
+                <FiMoreHorizontal />
+              </button>
+              {openMenuId === post._id && (
+                <div className="post-dropdown-menu">
+                  {isOwnPost(post) && (
+                    <button
+                      className="dropdown-item delete-item"
+                      onClick={() => handleDelete(post._id)}
+                    >
+                      <FiTrash2 /> Delete Post
+                    </button>
+                  )}
+                  {!isOwnPost(post) && (
+                    <div className="dropdown-item disabled">No actions available</div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="post-content">{post.description || post.content}</div>
