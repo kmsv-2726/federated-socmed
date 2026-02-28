@@ -8,6 +8,8 @@ import Settings from './components/HomePage-components/Settings';
 import LandingPage from './pages/LandingPage';
 import ServerHome from './pages/serverhome';
 import Admin from './pages/Admin';
+import HelpCenter from './pages/HelpCenter';
+import SupportForm from './pages/SupportForm';
 import './styles/app.css';
 
 const isAuthenticated = () => {
@@ -66,6 +68,16 @@ function App() {
             <Route path="/admin" element={
                 <ProtectedRoute>
                     <Admin />
+                </ProtectedRoute>
+            } />
+            <Route path="/help-center" element={
+                <ProtectedRoute>
+                    <HelpCenter />
+                </ProtectedRoute>
+            } />
+            <Route path="/help-center/contact" element={
+                <ProtectedRoute>
+                    <SupportForm />
                 </ProtectedRoute>
             } />
         </Routes>

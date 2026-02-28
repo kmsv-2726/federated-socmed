@@ -7,7 +7,8 @@ import {
   FiSettings,
   FiServer,
   FiLogOut,
-  FiShield
+  FiShield,
+  FiHelpCircle
 } from 'react-icons/fi';
 
 const SidebarLeft = () => {
@@ -84,6 +85,12 @@ const SidebarLeft = () => {
             <FiShield className="icon" /> Admin
           </button>
         )}
+        <button
+          className={`nav-item ${isActive('/help-center') ? 'active' : ''}`}
+          onClick={() => handleNavClick('/help-center')}
+        >
+          <FiHelpCircle className="icon" /> Help Center
+        </button>
         <button
           className="nav-item logout-btn"
           onClick={handleLogout}
