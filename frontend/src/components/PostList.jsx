@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FiThumbsUp, FiMessageCircle, FiShare2, FiMoreHorizontal, FiTrash2, FiUserPlus, FiUserMinus } from 'react-icons/fi';
 
 const API_BASE_URL = "http://localhost:5000/api";
 
 const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onFollowChanged }) => {
+  const navigate = useNavigate();
   const [openMenuId, setOpenMenuId] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [followingList, setFollowingList] = useState([]);
@@ -189,7 +191,14 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onFollowChanged
                 {getInitials(post.userDisplayName || post.author)}
               </div>
               <div>
-                <div className="author-name">{post.userDisplayName || post.author || 'Anonymous'}</div>
+                <div className="author-name author-link" onClick={() => {
+                  const authorFedId = getAuthorFederatedId(post);
+                  if (authorFedId && currentUser && authorFedId === currentUser.federatedId) {
+                    navigate('/profile');
+                  } else if (authorFedId) {
+                    navigate(`/user/${encodeURIComponent(authorFedId)}`);
+                  }
+                }}>{post.userDisplayName || post.author || 'Anonymous'}</div>
                 <div className="post-time">{formatTime(post.createdAt)}</div>
               </div>
             </div>
