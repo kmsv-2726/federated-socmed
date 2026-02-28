@@ -8,6 +8,10 @@ import Settings from './components/HomePage-components/Settings';
 import LandingPage from './pages/LandingPage';
 import ServerHome from './pages/serverhome';
 import Admin from './pages/Admin';
+import ChannelPage from './pages/ChannelPage';
+import HelpCenter from './pages/HelpCenter';
+import SupportForm from './pages/SupportForm';
+import UserProfile from './pages/UserProfile';
 import './styles/app.css';
 
 const isAuthenticated = () => {
@@ -46,9 +50,19 @@ function App() {
                     <Profile />
                 </ProtectedRoute>
             } />
+            <Route path="/user/:federatedId" element={
+                <ProtectedRoute>
+                    <UserProfile />
+                </ProtectedRoute>
+            } />
             <Route path="/channels" element={
                 <ProtectedRoute>
                     <Channels />
+                </ProtectedRoute>
+            } />
+            <Route path="/channels/:channelName" element={
+                <ProtectedRoute>
+                    <ChannelPage />
                 </ProtectedRoute>
             } />
             <Route path="/server-details" element={
@@ -66,6 +80,16 @@ function App() {
             <Route path="/admin" element={
                 <ProtectedRoute>
                     <Admin />
+                </ProtectedRoute>
+            } />
+            <Route path="/help-center" element={
+                <ProtectedRoute>
+                    <HelpCenter />
+                </ProtectedRoute>
+            } />
+            <Route path="/help-center/contact" element={
+                <ProtectedRoute>
+                    <SupportForm />
                 </ProtectedRoute>
             } />
         </Routes>

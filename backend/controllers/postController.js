@@ -1,6 +1,8 @@
 import { createError } from "../utils/error.js";
 import Post from "../models/Post.js";
-import Channel from "../models/Channel.js"; 
+import Channel from "../models/Channel.js";
+import UserFollow from "../models/UserFollow.js";
+import User from "../models/User.js";
 
 export const createPost = async (req, res, next) => {
   try {
@@ -121,6 +123,39 @@ export const likePost = async (req, res, next) => {
     });
   } catch (err) {
     return next(err);
+  }
+};
+
+export const getFollowingPosts = async (req, res, next) => {
+  try {
+    const userId = req.user.federatedId;
+    const userDisplayName = req.user.displayName;
+
+    // get list of users this person follows
+    const follows = await UserFollow.find({ followerFederatedId: userId });
+    const followingIds = follows.map(f => f.followingFederatedId);
+
+    // resolve display names from federatedIds
+    const followedUsers = await User.find(
+      { federatedId: { $in: followingIds } },
+      { displayName: 1 }
+    );
+    const followedNames = followedUsers.map(u => u.displayName);
+
+    // include the user's own display name so their own posts show up too
+    followedNames.push(userDisplayName);
+
+    const posts = await Post.find({
+      isUserPost: true,
+      userDisplayName: { $in: followedNames }
+    }).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      posts
+    });
+  } catch (err) {
+    next(err);
   }
 };
 

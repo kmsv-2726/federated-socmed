@@ -10,9 +10,11 @@ const API_BASE_URL = "http://localhost:5000/api";
 function Home() {
   const [activeTimeline, setActiveTimeline] = useState('home');
   const [posts, setPosts] = useState([]);
+  const [followingPosts, setFollowingPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // fetch all local posts (for the "Local" tab)
   const fetchPosts = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -39,8 +41,31 @@ function Home() {
     }
   };
 
+  // fetch posts from followed users only (for the "Home" tab)
+  const fetchFollowingPosts = async () => {
+    try {
+      const token = localStorage.getItem('token');
+
+      const res = await fetch(`${API_BASE_URL}/posts/following`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setFollowingPosts(data.posts);
+      }
+    } catch (err) {
+      console.error('Error fetching following posts:', err);
+    }
+  };
+
   useEffect(() => {
     fetchPosts();
+    fetchFollowingPosts();
   }, []);
 
   const handleTimelineChange = (timeline) => {
@@ -49,6 +74,7 @@ function Home() {
 
   const handlePostCreated = (newPost) => {
     setPosts([newPost, ...posts]);
+    setFollowingPosts([newPost, ...followingPosts]);
   };
 
   const handleLikePost = async (postId) => {
@@ -65,26 +91,33 @@ function Home() {
       const data = await res.json();
 
       if (data.success) {
-        setPosts(posts.map(post =>
+        const updateLike = post =>
           post._id === postId
             ? { ...post, likeCount: data.likeCount, liked: data.liked }
-            : post
-        ));
+            : post;
+        setPosts(posts.map(updateLike));
+        setFollowingPosts(followingPosts.map(updateLike));
       }
     } catch (err) {
       console.error('Error liking post:', err);
     }
   };
 
+  const handleDeletePost = (postId) => {
+    setPosts(posts.filter(p => p._id !== postId));
+    setFollowingPosts(followingPosts.filter(p => p._id !== postId));
+  };
+
   const getFilteredPosts = () => {
     switch (activeTimeline) {
       case 'home':
+        return followingPosts;
       case 'local':
         return posts;
       case 'federated':
-        return []; // to change later when we integrate federation
+        return [];
       default:
-        return posts;
+        return followingPosts;
     }
   };
 
@@ -110,7 +143,8 @@ function Home() {
           posts={getFilteredPosts()}
           onLike={handleLikePost}
           activeTimeline={activeTimeline}
-          onDeletePost={(postId) => setPosts(posts.filter(p => p._id !== postId))}
+          onDeletePost={handleDeletePost}
+          onFollowChanged={fetchFollowingPosts}
         />
       )}
     </Layout>

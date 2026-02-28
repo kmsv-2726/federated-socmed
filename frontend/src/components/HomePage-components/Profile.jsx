@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../Layout';
 import PostList from '../PostList';
-import { FiMapPin, FiCalendar, FiMail } from 'react-icons/fi';
+import { FiMapPin, FiCalendar, FiMail, FiX } from 'react-icons/fi';
 import '../../styles/Profile.css';
 
 const API_BASE_URL = "http://localhost:5000/api";
@@ -10,6 +10,14 @@ function Profile() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+
+  // modal state for displaying following/followers info
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalUsers, setModalUsers] = useState([]);
+  const [modalLoading, setModalLoading] = useState(false);
 
   const getUserData = () => {
     const user = localStorage.getItem('user');
@@ -68,8 +76,62 @@ function Profile() {
     }
   };
 
+  // fetch real follower and following counts
+  const fetchSocialCounts = async () => {
+    try {
+      const token = localStorage.getItem('token');
+
+      const [followersRes, followingRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/user/followers`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API_BASE_URL}/user/following`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ]);
+
+      const followersData = await followersRes.json();
+      const followingData = await followingRes.json();
+
+      if (followersData.success) {
+        setFollowersCount(followersData.followers.length);
+      }
+      if (followingData.success) {
+        setFollowingCount(followingData.following.length);
+      }
+    } catch (err) {
+      console.error('Error fetching social counts:', err);
+    }
+  };
+
+  // open modal with followers or following list
+  const openUserListModal = async (type) => {
+    setModalOpen(true);
+    setModalTitle(type === 'followers' ? 'Followers' : 'Following');
+    setModalLoading(true);
+    setModalUsers([]);
+
+    try {
+      const token = localStorage.getItem('token');
+      const endpoint = type === 'followers' ? 'followers' : 'following';
+      const res = await fetch(`${API_BASE_URL}/user/${endpoint}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setModalUsers(data[endpoint] || []);
+      }
+    } catch (err) {
+      console.error(`Error fetching ${type}:`, err);
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchUserPosts();
+    fetchSocialCounts();
   }, []);
 
   const handleLikePost = async (postId) => {
@@ -126,12 +188,12 @@ function Profile() {
             <span className="stat-number">{posts.length}</span>
             <span className="stat-label">Posts</span>
           </div>
-          <div className="stat">
-            <span className="stat-number">0</span> {/*to add later*/}
+          <div className="stat stat-clickable" onClick={() => openUserListModal('followers')}>
+            <span className="stat-number">{followersCount}</span>
             <span className="stat-label">Followers</span>
           </div>
-          <div className="stat">
-            <span className="stat-number">0</span> {/*to add later*/}
+          <div className="stat stat-clickable" onClick={() => openUserListModal('following')}>
+            <span className="stat-number">{followingCount}</span>
             <span className="stat-label">Following</span>
           </div>
         </div>
@@ -149,10 +211,49 @@ function Profile() {
               posts={posts}
               onLike={handleLikePost}
               activeTimeline="profile"
+              onDeletePost={(postId) => setPosts(posts.filter(p => p._id !== postId))}
+              onFollowChanged={fetchSocialCounts}
             />
           )}
         </div>
       </div>
+
+      {/* Followers / Following Modal */}
+      {modalOpen && (
+        <div className="modal-overlay" onClick={() => setModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{modalTitle}</h3>
+              <button className="modal-close" onClick={() => setModalOpen(false)}>
+                <FiX />
+              </button>
+            </div>
+            <div className="modal-body">
+              {modalLoading ? (
+                <p className="modal-empty">Loading...</p>
+              ) : modalUsers.length === 0 ? (
+                <p className="modal-empty">
+                  {modalTitle === 'Followers' ? 'No followers yet' : 'Not following anyone yet'}
+                </p>
+              ) : (
+                <ul className="user-list">
+                  {modalUsers.map((u) => (
+                    <li key={u.federatedId} className="user-list-item">
+                      <div className="user-list-avatar">
+                        {getInitials(u.displayName)}
+                      </div>
+                      <div className="user-list-info">
+                        <span className="user-list-name">{u.displayName}</span>
+                        <span className="user-list-id">{u.federatedId}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

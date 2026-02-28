@@ -179,6 +179,7 @@ npm run dev
 | GET | `/api/user/:federatedId` | Get user profile |
 | POST | `/api/user/:federatedId/follow` | Follow user |
 | DELETE | `/api/user/:federatedId/follow` | Unfollow user |
+| GET | `/api/user/:federatedId/follow/status` | Check follow status |
 | GET | `/api/user/followers` | Get followers |
 | GET | `/api/user/following` | Get following |
 
@@ -188,6 +189,8 @@ npm run dev
 | GET | `/api/posts` | Get all posts |
 | POST | `/api/posts` | Create post |
 | DELETE | `/api/posts/:id` | Delete post |
+| PUT | `/api/posts/like/:id` | Like post |
+| PUT | `/api/posts/comment/:id` | Add comment |
 
 ### Channels
 | Method | Endpoint | Description |
@@ -198,8 +201,11 @@ npm run dev
 | DELETE | `/api/channels/:id` | Delete channel (Admin) |
 | PUT | `/api/channels/description/:channelName` | Update description (Admin) |
 | PUT | `/api/channels/rules/:channelName` | Update rules (Admin) |
+| PUT | `/api/channels/image/:channelName` | Update image (Admin) |
+| GET | `/api/channels/followers/:channelName` | Get channel followers (Admin) |
 | POST | `/api/channels/follow/:channelName` | Follow channel |
 | DELETE | `/api/channels/unfollow/:channelName` | Unfollow channel |
+| GET | `/api/channels/follow/:channelName` | Check follow status |
 
 ### Reports
 | Method | Endpoint | Description |

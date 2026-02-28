@@ -24,7 +24,6 @@ const Admin = () => {
   const [channelsList, setChannelsList] = useState([]);
   const [reportsList, setReportsList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   // Modal state for editing channels
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -58,7 +57,7 @@ const Admin = () => {
         ]);
 
         let usedMock = false;
-        let newStats = { ...stats };
+        const newStats = { users: 0, posts: 0, reports: 0, engagement: 0 };
 
         if (usersRes.status === 'fulfilled') {
           setUsersList(usersRes.value.data.users || []);
@@ -88,7 +87,7 @@ const Admin = () => {
 
         setStats(prev => ({ ...prev, ...newStats }));
 
-      } catch (err) {
+      } catch {
         console.warn("Backend unavailable or error fetching data.");
         setStats({ users: 0, posts: 0, reports: 0, engagement: 0 });
         setUsersList([]);
@@ -101,6 +100,7 @@ const Admin = () => {
 
     fetchData();
   }, []);
+
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -210,6 +210,7 @@ const Admin = () => {
       alert(err.response?.data?.message || 'Failed to create channel.');
     }
   };
+
 
   const reviewReport = async (reportId, action) => {
     if (!action) {
@@ -535,7 +536,38 @@ const Admin = () => {
             <div className="admin-section">
               <div className="section-header">
                 <h2 className="section-h2">All Channels</h2>
-                <button className="primary-btn" onClick={() => setCreateModalOpen(true)}>Create New Channel</button>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button className="primary-btn" onClick={() => setCreateModalOpen(true)}>Create New Channel</button>
+                  <button
+                    className="action-btn-sm"
+                    onClick={async () => {
+                      try {
+                        const token = localStorage.getItem('token');
+                        const config = { headers: { Authorization: `Bearer ${token}` } };
+                        const samples = [
+                          { name: 'announcements', description: 'Company-wide announcements and notices', rules: ['Be respectful', 'No spam'], visibility: 'read-only', image: '' },
+                          { name: 'press', description: 'Press releases and media statements', rules: ['Official content only'], visibility: 'read-only', image: '' },
+                          { name: 'hr', description: 'HR policies and internal updates', rules: ['Internal use'], visibility: 'private', image: '' },
+                          { name: 'finance', description: 'Finance planning and budget reviews', rules: ['Confidential'], visibility: 'private', image: '' }
+                        ];
+                        for (const ch of samples) {
+                          try {
+                            await axios.post(`${API_BASE_URL}/channels`, ch, config);
+                          } catch {
+                            console.warn('Failed to seed a sample channel');
+                          }
+                        }
+                        const refreshed = await axios.get(`${API_BASE_URL}/channels`, config);
+                        setChannelsList(refreshed.data.channels || []);
+                        alert('Sample channels seeded.');
+                      } catch {
+                        alert('Failed to seed channels.');
+                      }
+                    }}
+                  >
+                    Seed Sample Channels
+                  </button>
+                </div>
               </div>
               <table className="admin-table">
                 <thead>
@@ -575,6 +607,7 @@ const Admin = () => {
                   {channelsList.length === 0 && <tr><td colSpan="6">No channels found.</td></tr>}
                 </tbody>
               </table>
+
             </div>
           )}
 
@@ -741,6 +774,7 @@ const Admin = () => {
                 >
                   <option value="public">Public</option>
                   <option value="private">Private</option>
+                  <option value="read-only">Read-only</option>
                 </select>
               </div>
               <div className="form-group">
