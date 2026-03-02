@@ -8,19 +8,9 @@ import { createError } from "../utils/error.js";
 // ──────────────────────────────────────────────
 const DEFAULT_RESULT_LIMIT = 20;
 
-// Regex: username part must be 1+ word‑chars; server part (if present) must be
-// 1+ word‑chars / dots / hyphens.  Validates both "alice" and "alice@example.com".
+
 const FEDERATED_ID_REGEX = /^[\w.-]+(@[\w.-]+)?$/;
 
-// ──────────────────────────────────────────────
-//  Helpers
-// ──────────────────────────────────────────────
-
-/**
- * Parse the raw search query.
- * Returns { username, serverName } where serverName is null for local‑only
- * queries and a string when the user explicitly targets a remote server.
- */
 export const parseSearchQuery = (rawQuery) => {
     if (!rawQuery || typeof rawQuery !== "string") {
         return { username: null, serverName: null, isValid: false, error: "Search query is required" };
@@ -58,17 +48,7 @@ export const parseSearchQuery = (rawQuery) => {
     return { username: trimmed, serverName: null, isValid: true, error: null };
 };
 
-// ──────────────────────────────────────────────
-//  Local search
-// ──────────────────────────────────────────────
 
-/**
- * Search local users by partial username match (case‑insensitive).
- * Uses MongoDB $regex for LIKE / substring behaviour.
- *
- * @param {string}  partialUsername  — the search term
- * @param {number}  limit           — max results (default 20)
- * @returns {Promise<Array>} matching user documents
  */
 export const searchLocalUsers = async (partialUsername, limit = DEFAULT_RESULT_LIMIT) => {
     const users = await User.find(
@@ -90,22 +70,7 @@ export const searchLocalUsers = async (partialUsername, limit = DEFAULT_RESULT_L
 };
 
 // ──────────────────────────────────────────────
-//  Remote search
-// ──────────────────────────────────────────────
 
-/**
- * Forward a search query to a specific remote server.
- *
- * The remote server is expected to expose:
- *   GET /api/search/users?q=<username>
- *
- * Results are returned as‑is from the remote server and also cached
- * locally as "remote" users so future local queries can surface them.
- *
- * @param {string} username   — partial or full username to search
- * @param {string} serverName — target server identifier
- * @param {number} limit      — max results
- * @returns {Promise<Array>}  remote user list
  */
 export const searchRemoteUsers = async (username, serverName, limit = DEFAULT_RESULT_LIMIT) => {
     // Check if remote search is enabled
@@ -173,17 +138,7 @@ export const searchRemoteUsers = async (username, serverName, limit = DEFAULT_RE
     }
 };
 
-// ──────────────────────────────────────────────
-//  Follow‑status enrichment  (User Story 6)
-// ──────────────────────────────────────────────
 
-/**
- * Annotate an array of user objects with `is_following` flag relative
- * to the requesting user.
- *
- * @param {Array}  users              — user documents (plain objects or Mongoose docs)
- * @param {string} currentFederatedId — the logged‑in user's federatedId
- * @returns {Promise<Array>}          — users with `is_following` boolean added
  */
 export const enrichWithFollowStatus = async (users, currentFederatedId) => {
     if (!currentFederatedId || users.length === 0) return users;
@@ -203,3 +158,4 @@ export const enrichWithFollowStatus = async (users, currentFederatedId) => {
         return userObj;
     });
 };
+
