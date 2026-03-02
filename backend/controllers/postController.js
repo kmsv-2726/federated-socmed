@@ -52,6 +52,20 @@ export const createPost = async (req, res, next) => {
       if (channel.visibility === "private") {
         return next(createError(403, "This channel is private"));
       }
+
+      // Check against channel's custom banned words list
+      if (channel.bannedWords && channel.bannedWords.length > 0) {
+        const lowercaseDesc = description.toLowerCase();
+        const containsBannedWord = channel.bannedWords.some(word => lowercaseDesc.includes(word.toLowerCase()));
+
+        if (containsBannedWord) {
+          return next(createError(400, `Your post contains terminology banned by the '${channelName}' channel.`));
+        }
+      }
+    } else { // If it's a user post, description is still required
+      if (!description || description.trim() === "") {
+        return next(createError(400, "Post description is required"));
+      }
     }
 
     // Federated ID generation stays here (request context logic)
