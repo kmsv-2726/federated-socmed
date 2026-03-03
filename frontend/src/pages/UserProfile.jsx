@@ -37,7 +37,10 @@ function UserProfile() {
     useEffect(() => {
         const fetchProfile = async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/user/${encodeURIComponent(decodedId)}`);
+                const token = localStorage.getItem('token');
+                const res = await fetch(`${API_BASE_URL}/user/${encodeURIComponent(decodedId)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 const data = await res.json();
                 if (data.success) {
                     setUserProfile(data.user);
@@ -53,20 +56,19 @@ function UserProfile() {
         fetchProfile();
     }, [decodedId]);
 
-    // fetch user's posts
+    // fetch user's posts — use authorFederatedId query param instead of fetching all posts
+    // and filtering client-side (which also fails for remote users not in the local DB)
     useEffect(() => {
         const fetchPosts = async () => {
             try {
                 const token = localStorage.getItem('token');
-                const res = await fetch(`${API_BASE_URL}/posts`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const res = await fetch(
+                    `${API_BASE_URL}/posts?authorFederatedId=${encodeURIComponent(decodedId)}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
                 const data = await res.json();
                 if (data.success) {
-                    const userPosts = data.posts.filter(
-                        p => p.federatedId?.startsWith(decodedId)
-                    );
-                    setPosts(userPosts);
+                    setPosts(data.posts);
                 }
             } catch {
                 console.error('Error fetching posts');

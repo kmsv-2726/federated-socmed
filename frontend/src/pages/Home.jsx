@@ -41,12 +41,12 @@ function Home() {
     }
   };
 
-  // fetch posts from followed users only (for the "Home" tab)
+  // fetch personalised timeline (local + remote followed users & channels) for the "Home" tab
   const fetchFollowingPosts = async () => {
     try {
       const token = localStorage.getItem('token');
 
-      const res = await fetch(`${API_BASE_URL}/posts/following`, {
+      const res = await fetch(`${API_BASE_URL}/posts/timeline`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -59,7 +59,7 @@ function Home() {
         setFollowingPosts(data.posts);
       }
     } catch (err) {
-      console.error('Error fetching following posts:', err);
+      console.error('Error fetching timeline posts:', err);
     }
   };
 

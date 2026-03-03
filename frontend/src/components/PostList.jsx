@@ -90,12 +90,10 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onFollowChanged
     }
   };
 
-  // figure out the federatedId of a post's author from the post's federatedId
-  // post federatedId format: "displayName@server/post/timestamp"
+  // Use authorFederatedId directly — parsing post.federatedId breaks for channel posts
+  // since their federatedId starts with channelName@server, not the author's ID
   const getAuthorFederatedId = (post) => {
-    if (!post.federatedId) return null;
-    const parts = post.federatedId.split('/post/');
-    return parts[0] || null;
+    return post.authorFederatedId || null;
   };
 
   const handleFollow = async (post) => {
@@ -446,4 +444,3 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onFollowChanged
 };
 
 export default PostList;
-

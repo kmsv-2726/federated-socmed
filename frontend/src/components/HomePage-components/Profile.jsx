@@ -50,21 +50,13 @@ function Profile() {
   const fetchUserPosts = async () => {
     try {
       const token = localStorage.getItem('token');
-
-      const res = await fetch(`${API_BASE_URL}/posts`, {
+      const res = await fetch(`${API_BASE_URL}/posts?authorFederatedId=${encodeURIComponent(user?.federatedId)}`, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-
       const data = await res.json();
-
       if (data.success) {
-        const userPosts = data.posts.filter(
-          post => post.userDisplayName === user?.displayName
-        );
-        setPosts(userPosts);
+        setPosts(data.posts);
       } else {
         setError(data.message || 'Failed to fetch posts');
       }
