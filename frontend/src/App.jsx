@@ -8,6 +8,7 @@ import Settings from './components/HomePage-components/Settings';
 import LandingPage from './pages/LandingPage';
 import ServerHome from './pages/serverhome';
 import Admin from './pages/Admin';
+import UnlockAccount from './pages/UnlockAccount';
 import './styles/app.css';
 
 const isAuthenticated = () => {
@@ -68,6 +69,7 @@ function App() {
                     <Admin />
                 </ProtectedRoute>
             } />
+            <Route path="/unlock-account" element={<UnlockAccount />} />
         </Routes>
     );
 }

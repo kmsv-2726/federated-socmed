@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
+import User from "../models/User.js";
 
-export const verifyToken = (req, res, next) => {
+export const verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -14,6 +15,11 @@ export const verifyToken = (req, res, next) => {
 
     if (decoded.serverName !== process.env.SERVER_NAME) {
       return res.status(401).json({ message: "Invalid token origin" });
+    }
+
+    const user = await User.findById(decoded.userId).select("tokenVersion");
+    if (!user || user.tokenVersion !== decoded.tokenVersion) {
+      return res.status(401).json({ message: "Session expired. Please log in again." });
     }
 
     req.user = {

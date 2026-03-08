@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import UserFollow from "../models/UserFollow.js";
 import { createError } from "../utils/error.js";
+import bcrypt from "bcrypt";
 import {
   followUserService,
   unfollowUserService
@@ -243,6 +244,43 @@ export const getMyFollowing = async (req, res, next) => {
       success: true,
       following
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    const userId = req.user.userId;
+
+    if (!oldPassword || !newPassword) {
+      return next(createError(400, "Both old and new passwords are required"));
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return next(createError(404, "User not found"));
+    }
+
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) {
+      return next(createError(401, "Incorrect old password"));
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password AND increment tokenVersion
+    user.password = hashedNewPassword;
+    user.tokenVersion += 1;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Password reset successful. All other devices have been logged out."
+    });
+
   } catch (err) {
     next(err);
   }

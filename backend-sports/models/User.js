@@ -97,6 +97,26 @@ const userSchema = new mongoose.Schema(
       default: null
     },
 
+    tokenVersion: {
+      type: Number,
+      default: 0
+    },
+
+    failedLoginAttempts: {
+      type: Number,
+      default: 0
+    },
+
+    unlockToken: {
+      type: String,
+      default: null
+    },
+
+    unlockTokenExpiry: {
+      type: Date,
+      default: null
+    },
+
     /* ===== FEDERATION ===== */
 
     originServer: {
