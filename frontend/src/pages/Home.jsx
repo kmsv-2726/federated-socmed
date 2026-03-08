@@ -116,8 +116,6 @@ function Home() {
         return followingPosts;
       case 'local':
         return posts;
-      case 'federated':
-        return [];
       default:
         return followingPosts;
     }

@@ -6,7 +6,6 @@ const router = express.Router();
 
 
 router.get("/", verifyToken, getAllProfiles);
-router.get("/top", verifyToken, getTopUsers);
 router.get("/followers", verifyToken, getMyFollowers);
 router.get("/following", verifyToken, getMyFollowing);
 

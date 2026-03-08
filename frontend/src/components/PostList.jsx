@@ -228,11 +228,9 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onFollowChanged
   if (!posts || posts.length === 0) {
     return (
       <div className="empty-state">
-        {activeTimeline === 'federated'
-          ? 'Federated timeline is empty'
-          : activeTimeline === 'home'
-            ? 'No posts yet. Follow some users to see their posts here!'
-            : 'No posts yet. Be the first to post!'}
+        {activeTimeline === 'home'
+          ? 'No posts yet. Follow some users to see their posts here!'
+          : 'No posts yet. Be the first to post!'}
       </div>
     );
   }
