@@ -31,7 +31,7 @@ const resolveChannelTarget = (channelInput) => {
 
 export const createChannel = async (req, res, next) => {
   try {
-    const { name, description, rules, visibility = 'public', image } = req.body;
+    const { name, description, rules, visibility = 'public', image, bannedWords = [] } = req.body;
     if (!name || !description || !rules) {
       return next(createError(400, "Missing required fields: name, description, and rules are required"));
     }
@@ -43,6 +43,7 @@ export const createChannel = async (req, res, next) => {
       description,
       rules,
       visibility,
+      bannedWords,
       image: image || null,
       federatedId,
       originServer: req.user.serverName,

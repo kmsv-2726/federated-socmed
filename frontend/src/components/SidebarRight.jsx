@@ -9,7 +9,6 @@ import { Link } from 'react-router-dom';
 
 const SidebarRight = () => {
   const [followedChannels, setFollowedChannels] = useState([]);
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const API_BASE_URL = "http://localhost:5000/api";
@@ -69,8 +68,6 @@ const SidebarRight = () => {
       setLoading(false);
     }
   };
-
-
 
   useEffect(() => {
     fetchFollowedChannels();

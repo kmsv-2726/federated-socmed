@@ -178,53 +178,54 @@ const ChannelPage = () => {
             {!currentChannel?.image && (currentChannel?.visibility === 'private' ? <FiLock /> : <FiHash />)}
           </div>
 
-          <div className="hero-content">
-            <div className="hero-top-row">
-              <div className="hero-main-info">
-                {currentChannel?.image && (
-                  <div className="channel-avatar-large">
-                    <img src={currentChannel.image} alt="" />
-                  </div>
-                )}
-                <div className="hero-text">
-                  <div className="channel-meta">
-                    {currentChannel?.visibility === 'public'
-                      ? 'Public Community'
-                      : currentChannel?.visibility === 'read-only'
-                        ? 'Read-only Community'
-                        : 'Private Community'} • {currentChannel?.followersCount || 0} followers
-                  </div>
-                  <h1>{getDisplayName(decodedChannelName)}</h1>
+          <div className={currentChannel?.image ? "hero-content has-image" : "hero-content"}>
+            <div className="hero-main">
+              {currentChannel?.image && (
+                <div className="channel-avatar-large">
+                  <img src={currentChannel.image} alt="" />
                 </div>
-              </div>
-
-              {currentChannel?.visibility === 'private' ? (
-                <button
-                  className={requested ? "btn-follow-toggle following" : "btn-follow-toggle join"}
-                  onClick={() => {
-                    const prev = JSON.parse(localStorage.getItem('requestedChannels') || '[]');
-                    const next = Array.isArray(prev)
-                      ? (requested ? prev.filter(n => n !== decodedChannelName) : [...prev, decodedChannelName])
-                      : [decodedChannelName];
-                    localStorage.setItem('requestedChannels', JSON.stringify(next));
-                    setRequested(!requested);
-                  }}
-                >
-                  {requested ? 'Requested' : 'Request Access'}
-                </button>
-              ) : (
-                <button
-                  className={isFollowing ? "btn-follow-toggle following" : "btn-follow-toggle join"}
-                  onClick={handleFollowToggle}
-                >
-                  {isFollowing ? 'Joined' : 'Join Community'}
-                </button>
               )}
+              <div className={currentChannel?.image ? "hero-text on-dark" : "hero-text on-light"}>
+                <div className={currentChannel?.image ? "channel-meta on-dark" : "channel-meta on-light"}>
+                  {currentChannel?.visibility === 'public'
+                    ? 'Public Community'
+                    : currentChannel?.visibility === 'read-only'
+                      ? 'Read-only Community'
+                      : 'Private Community'} • {currentChannel?.followersCount || 0} followers
+                </div>
+                <h1>{getDisplayName(decodedChannelName)}</h1>
+              </div>
             </div>
-            {currentChannel?.description && (
-              <p className="hero-description">{currentChannel.description}</p>
+
+            {currentChannel?.visibility === 'private' ? (
+              <button
+                className={requested ? "btn-follow-toggle following" : "btn-follow-toggle join"}
+                onClick={() => {
+                  const prev = JSON.parse(localStorage.getItem('requestedChannels') || '[]');
+                  const next = Array.isArray(prev)
+                    ? (requested ? prev.filter(n => n !== decodedChannelName) : [...prev, decodedChannelName])
+                    : [decodedChannelName];
+                  localStorage.setItem('requestedChannels', JSON.stringify(next));
+                  setRequested(!requested);
+                }}
+              >
+                {requested ? 'Requested' : 'Request Access'}
+              </button>
+            ) : (
+              <button
+                className={isFollowing ? "btn-follow-toggle following" : "btn-follow-toggle join"}
+                onClick={handleFollowToggle}
+              >
+                {isFollowing ? 'Joined' : 'Join Community'}
+              </button>
             )}
           </div>
+
+          {currentChannel?.description && (
+            <div className="hero-description">
+              {currentChannel.description}
+            </div>
+          )}
         </div>
 
         {/* Create Post Section */}

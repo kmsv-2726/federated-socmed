@@ -116,7 +116,7 @@ function Settings() {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          currentPassword: formData.currentPassword,
+          oldPassword: formData.currentPassword,
           newPassword: formData.newPassword
         })
       });

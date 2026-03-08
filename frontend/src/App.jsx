@@ -12,6 +12,7 @@ import ChannelPage from './pages/ChannelPage';
 import HelpCenter from './pages/HelpCenter';
 import SupportForm from './pages/SupportForm';
 import UserProfile from './pages/UserProfile';
+import UnlockAccount from './pages/UnlockAccount';
 import './styles/app.css';
 
 const isAuthenticated = () => {
@@ -92,6 +93,7 @@ function App() {
                     <SupportForm />
                 </ProtectedRoute>
             } />
+            <Route path="/unlock-account" element={<UnlockAccount />} />
         </Routes>
     );
 }

@@ -301,39 +301,37 @@ export const updateProfile = async (req, res, next) => {
 };
 
 // change password
-export const changePassword = async (req, res, next) => {
+export const resetPassword = async (req, res, next) => {
   try {
-    const userId = req.user.federatedId;
-    const { currentPassword, newPassword } = req.body;
+    const { oldPassword, newPassword } = req.body;
+    const userId = req.user.userId;
 
-    if (!currentPassword || !newPassword) {
-      return next(createError(400, "Current password and new password are required"));
+    if (!oldPassword || !newPassword) {
+      return next(createError(400, "Both old and new passwords are required"));
     }
 
-    if (newPassword.length < 8) {
-      return next(createError(400, "New password must be at least 8 characters"));
+    const user = await User.findById(userId);
+    if (!user) {
+      return next(createError(404, "User not found"));
     }
 
-    const user = await User.findOne({ federatedId: userId });
-    if (!user) return next(createError(404, "User not found"));
-
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
     if (!isMatch) {
-      return next(createError(400, "Current password is incorrect"));
+      return next(createError(401, "Incorrect old password"));
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
 
-    await User.findOneAndUpdate(
-      { federatedId: userId },
-      { $set: { password: hashedPassword } }
-    );
+    // Update password AND increment tokenVersion
+    user.password = hashedNewPassword;
+    user.tokenVersion += 1;
+    await user.save();
 
     res.status(200).json({
       success: true,
-      message: "Password changed successfully"
+      message: "Password reset successful. All other devices have been logged out."
     });
+
   } catch (err) {
     next(err);
   }
@@ -366,3 +364,4 @@ export const deleteAccount = async (req, res, next) => {
     next(err);
   }
 };
+

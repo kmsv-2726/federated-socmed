@@ -37,6 +37,10 @@ const channelSchema = new mongoose.Schema(
       enum: ["public", "read-only", "private"],
       default: "public"
     },
+    bannedWords: {
+      type: [String],
+      default: []
+    },
 
     /* ========= FOLLOWERS ========= */
 
