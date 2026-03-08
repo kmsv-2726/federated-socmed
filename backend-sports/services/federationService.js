@@ -39,22 +39,6 @@ export const sendFederationEvent = async ({
     return { skipped: true, reason: "server_paused" };
   }
 
-  // 🔥 TEMP: assume all servers run on localhost with different ports
-  // food → 5000
-  // sports → 5001
-  // You can adjust this mapping manually
-
-  const serverPortMap = {
-    food: 5000,
-    sports: 5001
-  };
-
-  const port = serverPortMap[targetServer];
-
-  if (!port) {
-    throw createError(400, "Unknown target server");
-  }
-
   const payload = {
     eventId: crypto.randomUUID(),
     type,
@@ -85,7 +69,7 @@ export const sendFederationEvent = async ({
   // 2. Attempt delivery
   try {
     const response = await axios.post(
-      `http://localhost:${port}/api/federation/inbox`,
+      `${trustedServer.serverUrl}/api/federation/inbox`,
       payload,
       {
         headers: {

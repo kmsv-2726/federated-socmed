@@ -8,6 +8,8 @@ import channelRoute from "./routes/channelRoute.js"
 import userRoute from "./routes/userRoute.js"
 import reportRoute from "./routes/reportRoute.js"
 import federationRout from "./routes/federationRoute.js"
+import serverConfigRoute from "./routes/serverConfigRoute.js"
+import ServerConfig from "./models/ServerConfig.js"
 
 dotenv.config()
 
@@ -28,6 +30,7 @@ app.use("/api/user", userRoute)
 app.use("/api/channels", channelRoute)
 app.use("/api/reports", reportRoute)
 app.use("/api/federation", federationRout)
+app.use("/api/server-config", serverConfigRoute)
 
 app.use((err, req, res, next) => {
   const errorStatus = err.status || 500
@@ -41,8 +44,21 @@ app.use((err, req, res, next) => {
 })
 
 mongoose.connect(process.env.MONGO_URL)
-  .then(() => {
+  .then(async () => {
     console.log("Connected to MongoDB")
+
+    // Initialize server config
+    try {
+      let config = await ServerConfig.findOne({ serverName: process.env.SERVER_NAME });
+      if (!config) {
+        config = new ServerConfig({ serverName: process.env.SERVER_NAME });
+        await config.save();
+        console.log(`Initialized default config for server: ${process.env.SERVER_NAME}`);
+      }
+    } catch (err) {
+      console.error("Failed to initialize server config:", err);
+    }
+
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`)
     })
