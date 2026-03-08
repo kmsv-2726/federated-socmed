@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   FiUser,
-  FiUsers,
   FiCircle,
   FiCoffee,
   FiBookOpen
@@ -107,52 +106,6 @@ const SidebarRight = () => {
             </Link>
           ))
         )}
-      </div>
-
-      <div className="widget">
-        <h3>Popular Users</h3>
-
-        <div className="contact-item">
-          <div className="contact-avatar online">
-            <FiUser />
-          </div>
-          <span>Mark Larsen</span>
-        </div>
-
-        <div className="contact-item">
-          <div className="contact-avatar online">
-            <FiUser />
-          </div>
-          <span>Ethan Reynolds</span>
-        </div>
-
-        <div className="contact-item">
-          <div className="contact-avatar online">
-            <FiUser />
-          </div>
-          <span>Ava Thompson</span>
-        </div>
-
-        <div className="contact-item">
-          <div className="contact-avatar online">
-            <FiUser />
-          </div>
-          <span>Haarper Mitchell</span>
-        </div>
-
-        <div className="contact-item">
-          <div className="contact-avatar online">
-            <FiUser />
-          </div>
-          <span>Pablo Morandi</span>
-        </div>
-
-        <div className="contact-item">
-          <div className="contact-avatar online">
-            <FiUser />
-          </div>
-          <span>Isabel Hughes</span>
-        </div>
       </div>
 
     </aside>
