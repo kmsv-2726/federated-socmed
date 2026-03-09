@@ -23,7 +23,9 @@ const Admin = () => {
   const [usersList, setUsersList] = useState([]);
   const [channelsList, setChannelsList] = useState([]);
   const [reportsList, setReportsList] = useState([]);
+  const [serversList, setServersList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // Modal state for editing channels
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -40,6 +42,17 @@ const Admin = () => {
     image: ''
   });
 
+  // Modal state for adding servers
+  const [serverModalOpen, setServerModalOpen] = useState(false);
+  const [serverFormData, setServerFormData] = useState({
+    name: '',
+    url: '',
+    category: 'general',
+    description: ''
+  });
+
+  const [globalFederationEnabled, setGlobalFederationEnabled] = useState(true);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -49,15 +62,17 @@ const Admin = () => {
           headers: { Authorization: `Bearer ${token}` }
         };
 
-        const [usersRes, postsRes, channelsRes, reportsRes] = await Promise.allSettled([
+        const [usersRes, postsRes, channelsRes, reportsRes, serversRes, federationRes] = await Promise.allSettled([
           axios.get(`${API_BASE_URL}/user`, config),
           axios.get(`${API_BASE_URL}/posts`, config),
           axios.get(`${API_BASE_URL}/channels`, config),
-          axios.get(`${API_BASE_URL}/reports?limit=100`, config)
+          axios.get(`${API_BASE_URL}/reports?limit=100`, config),
+          axios.get(`${API_BASE_URL}/servers`, config),
+          axios.get(`${API_BASE_URL}/federation/status`, config).catch(() => ({ data: { isEnabled: true } }))
         ]);
 
         let usedMock = false;
-        const newStats = { users: 0, posts: 0, reports: 0, engagement: 0 };
+        let newStats = { ...stats };
 
         if (usersRes.status === 'fulfilled') {
           setUsersList(usersRes.value.data.users || []);
@@ -81,13 +96,21 @@ const Admin = () => {
           newStats.reports = activeReports;
         }
 
+        if (serversRes.status === 'fulfilled') {
+          setServersList(serversRes.value.data.servers || []);
+        }
+
+        if (federationRes && federationRes.status === 'fulfilled' && federationRes.value.data) {
+          setGlobalFederationEnabled(federationRes.value.data.isEnabled !== false);
+        }
+
         if (usedMock || usersRes.status === 'rejected' || postsRes.status === 'rejected') {
           throw new Error("Backend unavailable, switching to mock data");
         }
 
         setStats(prev => ({ ...prev, ...newStats }));
 
-      } catch {
+      } catch (err) {
         console.warn("Backend unavailable or error fetching data.");
         setStats({ users: 0, posts: 0, reports: 0, engagement: 0 });
         setUsersList([]);
@@ -100,7 +123,6 @@ const Admin = () => {
 
     fetchData();
   }, []);
-
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -211,7 +233,6 @@ const Admin = () => {
     }
   };
 
-
   const reviewReport = async (reportId, action) => {
     if (!action) {
       alert(`Reviewing report: ${reportId}\n\nActions available: Approve, Reject`);
@@ -240,6 +261,70 @@ const Admin = () => {
     } catch (err) {
       console.error("Error updating report:", err);
       alert("Failed to update report status");
+    }
+  };
+
+  const handleAddServer = async (e) => {
+    e.preventDefault();
+    if (!serverFormData.name.trim() || !serverFormData.url.trim()) {
+      alert('Name and URL are required.');
+      return;
+    }
+
+    const submissionData = { ...serverFormData };
+    if (!submissionData.description || !submissionData.description.trim()) {
+      submissionData.description = "No description provided.";
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+
+      const response = await axios.post(`${API_BASE_URL}/servers`, submissionData, config);
+
+      if (response.data.success) {
+        setServersList(prev => [...prev, response.data.server]);
+        setServerModalOpen(false);
+        setServerFormData({ name: '', url: '', category: 'general', description: '' });
+        alert('Server added successfully!');
+      }
+    } catch (err) {
+      console.error('Error adding server:', err);
+      const msg = err.response?.data?.message || err.message || 'Failed to add server.';
+      alert(`Error: ${msg}`);
+    }
+  };
+
+  const handleDeleteServer = async (serverId) => {
+    if (!window.confirm('Are you sure you want to delete this server connection?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API_BASE_URL}/servers/${serverId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setServersList(prev => prev.filter(s => s._id !== serverId));
+      alert('Server deleted successfully.');
+    } catch (err) {
+      console.error('Error deleting server:', err);
+      alert('Failed to delete server.');
+    }
+  };
+
+  const handleGlobalFederationToggle = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.put(`${API_BASE_URL}/federation/status`,
+        { isEnabled: !globalFederationEnabled },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (response.data && typeof response.data.isEnabled === 'boolean') {
+        setGlobalFederationEnabled(response.data.isEnabled);
+      } else {
+        setGlobalFederationEnabled(!globalFederationEnabled);
+      }
+    } catch (err) {
+      console.error('Error toggling federation:', err);
+      setGlobalFederationEnabled(!globalFederationEnabled);
     }
   };
 
@@ -319,14 +404,6 @@ const Admin = () => {
             <div className="admin-nav-section">Settings</div>
 
             <div
-              className={`admin-nav-item ${activeTab === 'security' ? 'active' : ''}`}
-              onClick={() => setActiveTab('security')}
-            >
-              <FiLock size={18} />
-              <span>Security</span>
-            </div>
-
-            <div
               className={`admin-nav-item ${activeTab === 'server' ? 'active' : ''}`}
               onClick={() => setActiveTab('server')}
             >
@@ -355,7 +432,6 @@ const Admin = () => {
             <>
               <div className="admin-header">
                 <h1 className="page-title">Dashboard Overview</h1>
-                <button className="primary-btn" onClick={() => alert('Generating report...')}>Generate Report</button>
               </div>
 
               {/* Stats Grid */}
@@ -536,38 +612,7 @@ const Admin = () => {
             <div className="admin-section">
               <div className="section-header">
                 <h2 className="section-h2">All Channels</h2>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button className="primary-btn" onClick={() => setCreateModalOpen(true)}>Create New Channel</button>
-                  <button
-                    className="action-btn-sm"
-                    onClick={async () => {
-                      try {
-                        const token = localStorage.getItem('token');
-                        const config = { headers: { Authorization: `Bearer ${token}` } };
-                        const samples = [
-                          { name: 'announcements', description: 'Company-wide announcements and notices', rules: ['Be respectful', 'No spam'], visibility: 'read-only', image: '' },
-                          { name: 'press', description: 'Press releases and media statements', rules: ['Official content only'], visibility: 'read-only', image: '' },
-                          { name: 'hr', description: 'HR policies and internal updates', rules: ['Internal use'], visibility: 'private', image: '' },
-                          { name: 'finance', description: 'Finance planning and budget reviews', rules: ['Confidential'], visibility: 'private', image: '' }
-                        ];
-                        for (const ch of samples) {
-                          try {
-                            await axios.post(`${API_BASE_URL}/channels`, ch, config);
-                          } catch {
-                            console.warn('Failed to seed a sample channel');
-                          }
-                        }
-                        const refreshed = await axios.get(`${API_BASE_URL}/channels`, config);
-                        setChannelsList(refreshed.data.channels || []);
-                        alert('Sample channels seeded.');
-                      } catch {
-                        alert('Failed to seed channels.');
-                      }
-                    }}
-                  >
-                    Seed Sample Channels
-                  </button>
-                </div>
+                <button className="primary-btn" onClick={() => setCreateModalOpen(true)}>Create New Channel</button>
               </div>
               <table className="admin-table">
                 <thead>
@@ -607,7 +652,6 @@ const Admin = () => {
                   {channelsList.length === 0 && <tr><td colSpan="6">No channels found.</td></tr>}
                 </tbody>
               </table>
-
             </div>
           )}
 
@@ -664,28 +708,93 @@ const Admin = () => {
 
           {activeTab === 'server' && (
             <>
+              <div className="admin-header">
+                <h1 className="page-title">Server Management</h1>
+              </div>
+
               <section className="admin-section">
                 <div className="section-header">
-                  <h2 className="section-h2">Server Identity</h2>
-                  <button className="primary-btn" onClick={() => alert('Edit functionality coming soon')}>Edit</button>
+                  <h2 className="section-h2">Local Server Identity (This Node)</h2>
                 </div>
                 <div className="server-info-content">
                   <h3 style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.05em' }}>Server Name</h3>
                   <div style={{ fontSize: '18px', fontWeight: '600', color: '#111827', display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <FiServer size={24} />
-                    <span>Connected Main Server</span>
+                    <span>{(() => {
+                      try {
+                        const user = JSON.parse(localStorage.getItem('user'));
+                        return user?.serverName || 'Unknown Server';
+                      } catch {
+                        return 'Unknown Server';
+                      }
+                    })()}</span>
                   </div>
                 </div>
               </section>
 
               <section className="admin-section">
                 <div className="section-header">
-                  <h2 className="section-h2">Description</h2>
+                  <h2 className="section-h2">Remote / Connected Servers</h2>
+                  <button className="primary-btn" onClick={() => setServerModalOpen(true)}>Add New Server</button>
                 </div>
-                <div className="server-info-content">
-                  <div style={{ fontSize: '15px', lineHeight: '1.6', color: '#374151', backgroundColor: '#f9fafb', padding: '16px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                    This is the primary community server for Connected. All general discussions, updates, and public channels are hosted here.
+
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>URL</th>
+                      <th>Category</th>
+                      <th>Description</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {serversList.map(server => (
+                      <tr key={server._id}>
+                        <td><strong>{server.name}</strong></td>
+                        <td>{server.url}</td>
+                        <td>
+                          <span className="status-badge" style={{ backgroundColor: '#f3f4f6', color: '#374151' }}>
+                            {server.category}
+                          </span>
+                        </td>
+                        <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {server.description}
+                        </td>
+                        <td style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <button className="action-btn-sm" style={{ color: '#ef4444', borderColor: '#fee2e2' }} onClick={() => handleDeleteServer(server._id)}>
+                            <FiTrash2 size={14} /> Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {serversList.length === 0 && (
+                      <tr>
+                        <td colSpan="5" style={{ textAlign: 'center', padding: '24px', color: '#6b7280' }}>
+                          No remote servers connected. Add one to enable federation!
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+                <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3 style={{ margin: 0, color: '#374151', fontSize: '16px' }}>Network Federation</h3>
+                    <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>Toggle entire network federation dynamically</p>
                   </div>
+                  <button
+                    className="primary-btn"
+                    onClick={handleGlobalFederationToggle}
+                    style={{
+                      backgroundColor: globalFederationEnabled ? '#10b981' : '#ef4444',
+                      minWidth: '150px',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    {globalFederationEnabled ? 'FEDERATION: ON' : 'FEDERATION: OFF'}
+                  </button>
                 </div>
               </section>
             </>
@@ -774,7 +883,6 @@ const Admin = () => {
                 >
                   <option value="public">Public</option>
                   <option value="private">Private</option>
-                  <option value="read-only">Read-only</option>
                 </select>
               </div>
               <div className="form-group">
@@ -789,6 +897,59 @@ const Admin = () => {
               <div className="modal-actions">
                 <button type="button" className="action-btn-sm" onClick={() => setCreateModalOpen(false)}>Cancel</button>
                 <button type="submit" className="primary-btn">Create Channel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Server Modal */}
+      {serverModalOpen && (
+        <div className="modal-overlay" onClick={() => setServerModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Add New Server</h2>
+            <form onSubmit={handleAddServer}>
+              <div className="form-group">
+                <label>Server Name *</label>
+                <input
+                  type="text"
+                  value={serverFormData.name}
+                  onChange={(e) => setServerFormData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g., Food Server, Sports Hub"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Server URL *</label>
+                <input
+                  type="text"
+                  value={serverFormData.url}
+                  onChange={(e) => setServerFormData(prev => ({ ...prev, url: e.target.value }))}
+                  placeholder="https://example.com or http://localhost:5001"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Category</label>
+                <input
+                  type="text"
+                  value={serverFormData.category}
+                  onChange={(e) => setServerFormData(prev => ({ ...prev, category: e.target.value }))}
+                  placeholder="general, sports, food, etc."
+                />
+              </div>
+              <div className="form-group">
+                <label>Description *</label>
+                <textarea
+                  value={serverFormData.description}
+                  onChange={(e) => setServerFormData(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Tell us about this server..."
+                  required
+                />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="action-btn-sm" onClick={() => setServerModalOpen(false)}>Cancel</button>
+                <button type="submit" className="primary-btn" style={{ backgroundColor: '#5865f2' }}>Add Server</button>
               </div>
             </form>
           </div>
