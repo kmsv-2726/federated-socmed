@@ -366,3 +366,35 @@ export const deleteAccount = async (req, res, next) => {
   }
 };
 
+export const searchUsers = async (req, res, next) => {
+  try {
+    const { q } = req.query;
+    if (!q) {
+      return res.status(200).json({ success: true, users: [] });
+    }
+
+    // Attempt to split query in case it comes through as "username:0:0"
+    const parsedQuery = q.split(':')[0].trim();
+
+    let users = await User.find(
+      { displayName: { $regex: new RegExp(parsedQuery, 'i') } },
+      { displayName: 1, avatarUrl: 1, serverName: 1 }
+    ).limit(10);
+
+    // Map to the shape expected by DirectMessage.jsx
+    users = users.map(u => ({
+      _id: u._id,
+      username: u.displayName,
+      profilePicture: u.avatarUrl,
+      serverName: u.serverName
+    }));
+
+    res.status(200).json({
+      success: true,
+      users
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
