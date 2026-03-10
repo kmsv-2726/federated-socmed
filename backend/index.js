@@ -21,7 +21,7 @@ const app = express()
 const httpServer = createServer(app)
 export const io = new Server(httpServer, {
   cors: {
-    origin: ["http://localhost:5173", "http://localhost:3000"],
+    origin: ["http://localhost:5173", "http://localhost:3000", "https://federated-socialnetw.vercel.app"],
     credentials: true
   }
 })
