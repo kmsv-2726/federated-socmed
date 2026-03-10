@@ -41,6 +41,12 @@ function UserProfile() {
         return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
     };
 
+    const formatDate = (dateStr) => {
+        if (!dateStr) return 'Recently';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    };
+
     // fetch the user's profile
     useEffect(() => {
         const fetchProfile = async () => {
@@ -323,8 +329,8 @@ function UserProfile() {
                                 <p className="username">@{userProfile.displayName}</p>
                                 <p className="bio">{userProfile.federatedId}</p>
                                 <div className="profile-meta">
-                                    <span><FiCalendar /> Joined recently</span>
-                                    <span><FiMapPin /> {userProfile.serverName || 'Unknown server'}</span>
+                                    <span><FiCalendar /> Joined {formatDate(userProfile.createdAt)}</span>
+                                    <span><FiMapPin /> {userProfile.originServer || userProfile.serverName}</span>
                                 </div>
                             </div>
                         </div>
