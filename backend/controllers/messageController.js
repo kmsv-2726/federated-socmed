@@ -31,6 +31,31 @@ export const sendMessage = async (req, res, next) => {
             return res.status(400).json({ success: false, message: 'Receiver and message text are required' });
         }
 
+        // Check if either user has blocked the other
+        const [sender, receiver] = await Promise.all([
+            User.findById(senderId),
+            User.findById(receiverId)
+        ]);
+
+        if (!receiver) {
+            return res.status(404).json({ success: false, message: 'Receiver not found' });
+        }
+
+        const UserBlock = (await import('../models/UserBlock.js')).default;
+        const blockCheck = await UserBlock.findOne({
+            $or: [
+                { blockerFederatedId: sender.federatedId, blockedFederatedId: receiver.federatedId },
+                { blockerFederatedId: receiver.federatedId, blockedFederatedId: sender.federatedId }
+            ]
+        });
+
+        if (blockCheck) {
+            return res.status(403).json({
+                success: false,
+                message: 'Cannot send message. One of the users has blocked the other.'
+            });
+        }
+
         const newMessage = new Message({
             sender: senderId,
             receiver: receiverId,
@@ -58,7 +83,7 @@ export const getChatHistoryUsers = async (req, res, next) => {
 
         const messages = await Message.find({
             $or: [{ sender: currentUserId }, { receiver: currentUserId }]
-        }).populate('sender receiver', 'displayName avatarUrl serverName');
+        }).populate('sender receiver', 'displayName avatarUrl serverName federatedId');
 
         const usersMap = new Map();
 
@@ -72,7 +97,8 @@ export const getChatHistoryUsers = async (req, res, next) => {
                     _id: otherUser._id,
                     username: otherUser.displayName,
                     profilePicture: otherUser.avatarUrl,
-                    serverName: otherUser.serverName
+                    serverName: otherUser.serverName,
+                    federatedId: otherUser.federatedId
                 });
             }
         });

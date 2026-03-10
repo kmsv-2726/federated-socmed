@@ -110,6 +110,20 @@ function Home() {
     setFollowingPosts(followingPosts.filter(p => p._id !== postId));
   };
 
+  const handleMuteUser = (mutedFederatedId) => {
+    // Filter out posts from both timelines where the author's federatedId matches the muted one
+    // Some posts might have `authorFederatedId`, others might use `federatedId` split
+    setPosts(posts.filter(p => {
+      const targetFedId = p.authorFederatedId || (p.federatedId && p.federatedId.split('/post/')[0]);
+      return targetFedId !== mutedFederatedId;
+    }));
+
+    setFollowingPosts(followingPosts.filter(p => {
+      const targetFedId = p.authorFederatedId || (p.federatedId && p.federatedId.split('/post/')[0]);
+      return targetFedId !== mutedFederatedId;
+    }));
+  };
+
   const getFilteredPosts = () => {
     switch (activeTimeline) {
       case 'home':
@@ -146,6 +160,7 @@ function Home() {
           onDeletePost={handleDeletePost}
           onRepostSuccess={handlePostCreated}
           onFollowChanged={fetchFollowingPosts}
+          onMuteUser={handleMuteUser}
         />
       )}
     </Layout>

@@ -4,7 +4,7 @@ import { FiThumbsUp, FiMessageCircle, FiRepeat, FiMoreHorizontal, FiTrash2, FiSe
 
 const API_BASE_URL = "http://localhost:5000/api";
 
-const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onRepostSuccess }) => {
+const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onRepostSuccess, onMuteUser }) => {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [openCommentsId, setOpenCommentsId] = useState(null);
@@ -250,11 +250,50 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onRepostSuccess
     }
   };
 
+  const handleMute = async (post) => {
+    if (!window.confirm(`Are you sure you want to mute ${post.userDisplayName || post.author}? Their posts will no longer appear in your timeline.`)) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      // The federatedId is usually authorFederatedId. Fall back if not present.
+      const targetFedId = post.authorFederatedId || post.federatedId.split('/post/')[0];
+
+      const response = await fetch(`${API_BASE_URL}/mutes/${targetFedId}/toggle`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        if (onMuteUser) {
+          onMuteUser(targetFedId);
+        }
+        setOpenMenuId(null);
+        alert(data.message);
+      } else {
+        alert(data.message || 'Failed to mute user');
+      }
+    } catch (err) {
+      console.error('Error muting user:', err);
+      alert('Failed to mute user. Please try again.');
+    }
+  };
+
   const isOwnPost = (post) => {
     if (!currentUser) return false;
     if (currentUser.role === 'admin') return true;
     return post.federatedId?.includes(currentUser.federatedId) ||
-      post.userDisplayName === currentUser.displayName;
+      post.userDisplayName === currentUser.displayName ||
+      post.author === currentUser.displayName;
+  };
+
+  const isActuallyOwnPost = (post) => {
+    if (!currentUser) return false;
+    return post.federatedId?.includes(currentUser.federatedId) ||
+      post.userDisplayName === currentUser.displayName ||
+      post.author === currentUser.displayName;
   };
 
   const handleNavigateToProfile = (federatedId) => {
@@ -322,8 +361,12 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onRepostSuccess
                   </div>
                   <div className="post-time">
                     {formatTime(post.createdAt)}
-                    {post.serverName && (
-                      <span className="post-server-tag"> • {post.serverName}</span>
+                    {post.isRemote && (
+                      <span className="post-server-tag">
+                        {' • '}{post.isChannelPost && post.channelName
+                          ? `${post.channelName}@${post.originServer}`
+                          : post.authorFederatedId || `${post.userDisplayName || post.author}@${post.originServer}`}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -335,15 +378,21 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onRepostSuccess
                 </button>
                 {openMenuId === post._id && (
                   <div className="post-dropdown-menu">
-                    {isOwnPost(post) ? (
+                    {isOwnPost(post) && (
                       <button
                         className="dropdown-item delete-item"
                         onClick={() => handleDelete(post._id)}
                       >
                         <FiTrash2 /> Delete Post
                       </button>
-                    ) : (
-                      <div className="dropdown-item disabled">No actions available</div>
+                    )}
+                    {!isActuallyOwnPost(post) && (
+                      <button
+                        className="dropdown-item"
+                        onClick={() => handleMute(post)}
+                      >
+                        <FiVolumeX /> Mute User
+                      </button>
                     )}
                   </div>
                 )}

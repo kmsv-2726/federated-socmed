@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import PostList from '../components/PostList';
-import { FiMapPin, FiCalendar, FiArrowLeft, FiUserPlus, FiUserMinus, FiX } from 'react-icons/fi';
+import { FiMapPin, FiCalendar, FiArrowLeft, FiUserPlus, FiUserMinus, FiX, FiVolumeX, FiVolume2, FiUserX, FiSlash } from 'react-icons/fi';
 import '../styles/Profile.css';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api");
@@ -24,6 +24,10 @@ function UserProfile() {
     const [modalTitle, setModalTitle] = useState('');
     const [modalUsers, setModalUsers] = useState([]);
     const [modalLoading, setModalLoading] = useState(false);
+    const [isMuted, setIsMuted] = useState(false);
+    const [muteLoading, setMuteLoading] = useState(false);
+    const [isBlocked, setIsBlocked] = useState(false);
+    const [blockLoading, setBlockLoading] = useState(false);
 
     const currentUser = (() => {
         const u = localStorage.getItem('user');
@@ -35,6 +39,12 @@ function UserProfile() {
     const getInitials = (name) => {
         if (!name) return '??';
         return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+    };
+
+    const formatDate = (dateStr) => {
+        if (!dateStr) return 'Recently';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     };
 
     // fetch the user's profile
@@ -101,6 +111,84 @@ function UserProfile() {
         };
         checkFollow();
     }, [decodedId, isOwnProfile]);
+
+    // check mute status
+    useEffect(() => {
+        if (isOwnProfile) return;
+        const checkMute = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(
+                    `${API_BASE_URL}/mutes/${encodeURIComponent(decodedId)}/status`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+                const data = await res.json();
+                if (data.success) setIsMuted(data.isMuted);
+            } catch {
+                console.error('Error checking mute status');
+            }
+        };
+        checkMute();
+    }, [decodedId, isOwnProfile]);
+
+    // check block status
+    useEffect(() => {
+        if (isOwnProfile) return;
+        const checkBlock = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(
+                    `${API_BASE_URL}/blocks/${encodeURIComponent(decodedId)}/status`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+                const data = await res.json();
+                if (data.success) setIsBlocked(data.isBlocked);
+            } catch {
+                console.error('Error checking block status');
+            }
+        };
+        checkBlock();
+    }, [decodedId, isOwnProfile]);
+
+    const handleBlockToggle = async () => {
+        if (!isBlocked && !window.confirm(`Are you sure you want to block ${userProfile?.displayName}? You will no longer be able to send or receive direct messages from them.`)) return;
+
+        setBlockLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(
+                `${API_BASE_URL}/blocks/${encodeURIComponent(decodedId)}/toggle`,
+                { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            const data = await res.json();
+            if (data.success) {
+                setIsBlocked(data.isBlocked);
+            }
+        } catch {
+            console.error('Error toggling block');
+        } finally {
+            setBlockLoading(false);
+        }
+    };
+
+    const handleMuteToggle = async () => {
+        setMuteLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(
+                `${API_BASE_URL}/mutes/${encodeURIComponent(decodedId)}/toggle`,
+                { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            const data = await res.json();
+            if (data.success) {
+                setIsMuted(data.isMuted);
+            }
+        } catch {
+            console.error('Error toggling mute');
+        } finally {
+            setMuteLoading(false);
+        }
+    };
 
     const openUserListModal = async (type) => {
         setModalOpen(true);
@@ -211,13 +299,31 @@ function UserProfile() {
                                 <div className="profile-name-row">
                                     <h1>{userProfile.displayName}</h1>
                                     {!isOwnProfile && (
-                                        <button
-                                            className={`follow-btn ${isFollowing ? 'following' : ''}`}
-                                            onClick={handleFollowToggle}
-                                            disabled={followLoading}
-                                        >
-                                            {isFollowing ? <><FiUserMinus /> Unfollow</> : <><FiUserPlus /> Follow</>}
-                                        </button>
+                                        <div style={{ display: 'flex', gap: '10px' }}>
+                                            <button
+                                                className={`follow-btn ${isFollowing ? 'following' : ''}`}
+                                                onClick={handleFollowToggle}
+                                                disabled={followLoading}
+                                            >
+                                                {isFollowing ? <><FiUserMinus /> Unfollow</> : <><FiUserPlus /> Follow</>}
+                                            </button>
+                                            <button
+                                                className={`follow-btn ${isMuted ? 'muted' : ''}`}
+                                                onClick={handleMuteToggle}
+                                                disabled={muteLoading}
+                                                style={isMuted ? { backgroundColor: '#dc2626', color: '#fff', borderColor: '#dc2626' } : {}}
+                                            >
+                                                {isMuted ? <><FiVolume2 /> Unmute</> : <><FiVolumeX /> Mute</>}
+                                            </button>
+                                            <button
+                                                className={`follow-btn ${isBlocked ? 'blocked' : ''}`}
+                                                onClick={handleBlockToggle}
+                                                disabled={blockLoading}
+                                                style={isBlocked ? { backgroundColor: '#000', color: '#fff', borderColor: '#000' } : {}}
+                                            >
+                                                {isBlocked ? <><FiSlash /> Unblock</> : <><FiUserX /> Block</>}
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                                 <p className="username">@{userProfile.displayName}</p>
