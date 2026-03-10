@@ -150,3 +150,27 @@ export const logoutUser = async (req, res, next) => {
     next(err);
   }
 };
+
+export const unlockAccount = async (req, res, next) => {
+  try {
+    const userId = req.body.userId || req.query.userId;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "User ID is required" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { isSuspended: false },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.status(200).json({ success: true, message: "Account successfully unlocked!" });
+  } catch (err) {
+    next(err);
+  }
+};
