@@ -19,7 +19,9 @@ const ChannelPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [userRole, setUserRole] = useState('user');
-  const [requested, setRequested] = useState(false);
+  const [currentUserFedId, setCurrentUserFedId] = useState(null);
+  const [requestStatus, setRequestStatus] = useState('none');
+  const [pendingRequests, setPendingRequests] = useState([]);
 
   useEffect(() => {
     try {
@@ -27,9 +29,11 @@ const ChannelPage = () => {
       if (userStr) {
         const user = JSON.parse(userStr);
         setUserRole(user.role || 'user');
+        setCurrentUserFedId(user.federatedId || null);
       }
     } catch {
       setUserRole('user');
+      setCurrentUserFedId(null);
     }
   }, []);
 
@@ -68,20 +72,47 @@ const ChannelPage = () => {
       });
       const data = await res.json();
       if (data.success) {
-        let channelObj = null;
-        if (data.channel) {
-          channelObj = data.channel;
-        } else if (data.channels) {
-          if (Array.isArray(data.channels)) {
-            channelObj = data.channels.find(c => c.name === name) || data.channels[0];
-          } else {
-            channelObj = data.channels;
-          }
+        let channelObj = Array.isArray(data.channels)
+          ? data.channels.find(c => c.name === name) || data.channels[0]
+          : (data.channels || data.channel);
+        if (channelObj) {
+          setCurrentChannel(channelObj);
         }
-        setCurrentChannel(channelObj);
       }
     } catch (err) {
       console.error('Error fetching channel details:', err);
+    }
+  };
+
+  // Fetch pending requests (for admin only)
+  const fetchPendingRequests = async (name) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/channels/requests/${encodeURIComponent(name)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPendingRequests(data.requests || []);
+      }
+    } catch (err) {
+      console.error('Error fetching pending requests:', err);
+    }
+  };
+
+  // Check user's request status
+  const checkRequestStatus = async (name) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/channels/request-status/${encodeURIComponent(name)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRequestStatus(data.status); // "none", "pending", "rejected"
+      }
+    } catch (err) {
+      console.error('Error checking request status:', err);
     }
   };
 
@@ -124,24 +155,51 @@ const ChannelPage = () => {
     }
   };
 
-  const handleLikePost = async (postId) => {
+  // Request Access
+  const handleRequestAccess = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/posts/like/${postId}`, {
-        method: 'PUT',
+      const res = await fetch(`${API_BASE_URL}/channels/request-access/${encodeURIComponent(decodedChannelName)}`, {
+        method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
       if (data.success) {
-        setPosts(posts.map(post =>
-          post._id === postId
-            ? { ...post, likeCount: data.likeCount, liked: data.liked }
-            : post
-        ));
+        setRequestStatus('pending');
+      } else {
+        alert(data.message || 'Failed to request access');
       }
     } catch (err) {
-      console.error('Error liking post:', err);
+      console.error('Error requesting access:', err);
     }
+  };
+
+  // Resolve Request (admin)
+  const handleResolveRequest = async (userFederatedId, action) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/channels/resolve-request/${encodeURIComponent(decodedChannelName)}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ userFederatedId, action })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPendingRequests(prev => prev.filter(r => r.userFederatedId !== userFederatedId));
+      } else {
+        alert(data.message || 'Failed to resolve request');
+      }
+    } catch (err) {
+      console.error('Error resolving request:', err);
+    }
+  };
+
+  const handleLikePost = async (postId) => {
+    // PostList.jsx handles liking internally now — this is a fallback no-op
+    // kept for prop compatibility
   };
 
   const handleDeletePost = async (postId) => {
@@ -161,11 +219,10 @@ const ChannelPage = () => {
   };
   useEffect(() => {
     if (decodedChannelName) {
-      const req = JSON.parse(localStorage.getItem('requestedChannels') || '[]');
-      setRequested(Array.isArray(req) ? req.includes(decodedChannelName) : false);
       fetchChannelDetails(decodedChannelName);
       fetchChannelPosts(decodedChannelName);
       checkFollowStatus(decodedChannelName);
+      checkRequestStatus(decodedChannelName);
     }
   }, [decodedChannelName]);
 
@@ -204,19 +261,18 @@ const ChannelPage = () => {
               </div>
             </div>
 
-            {currentChannel?.visibility === 'private' ? (
+            {(userRole === 'admin' || currentChannel?.createdBy === currentUserFedId) ? (
+              <button className="btn-follow-toggle following" disabled style={{ opacity: 0.8, cursor: 'default' }}>
+                {userRole === 'admin' ? 'Admin Access' : 'Creator Access'}
+              </button>
+            ) : currentChannel?.visibility === 'private' ? (
               <button
-                className={requested ? "btn-follow-toggle following" : "btn-follow-toggle join"}
-                onClick={() => {
-                  const prev = JSON.parse(localStorage.getItem('requestedChannels') || '[]');
-                  const next = Array.isArray(prev)
-                    ? (requested ? prev.filter(n => n !== decodedChannelName) : [...prev, decodedChannelName])
-                    : [decodedChannelName];
-                  localStorage.setItem('requestedChannels', JSON.stringify(next));
-                  setRequested(!requested);
-                }}
+                className={`btn-follow-toggle ${requestStatus === 'pending' ? 'following' : isFollowing ? 'following' : 'join'}`}
+                onClick={isFollowing ? handleFollowToggle : (requestStatus === 'none' || requestStatus === 'rejected') ? handleRequestAccess : undefined}
+                disabled={requestStatus === 'pending'}
+                title={requestStatus === 'rejected' ? 'Your previous request was rejected. Click to request again.' : ''}
               >
-                {requested ? 'Requested' : 'Request Access'}
+                {isFollowing ? 'Joined' : requestStatus === 'pending' ? 'Requested' : requestStatus === 'rejected' ? 'Request Again' : 'Request Access'}
               </button>
             ) : (
               <button
@@ -260,7 +316,7 @@ const ChannelPage = () => {
           <div className="loading-state">Loading posts...</div>
         ) : error ? (
           <div className="empty-state" style={{ color: '#dc2626' }}>{error}</div>
-        ) : !canViewChannelContent({ role: userRole }, currentChannel, isFollowing) ? (
+        ) : !canViewChannelContent({ role: userRole }, currentChannel, isFollowing) && userRole !== 'admin' ? (
           <div className="empty-state">
             <FiLock size={48} style={{ marginBottom: '16px', color: '#6b7280' }} />
             <h3>This is a private community</h3>

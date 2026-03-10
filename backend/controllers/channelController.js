@@ -1,6 +1,7 @@
 import { createError } from "../utils/error.js";
 import Channel from "../models/Channel.js";
 import ChannelFollow from "../models/ChannelFollow.js";
+import ChannelRequest from "../models/ChannelRequest.js";
 import TrustedServer from "../models/TrustedServer.js";
 import axios from "axios";
 import {
@@ -252,6 +253,10 @@ export const followChannel = async (req, res, next) => {
         return next(createError(404, "Channel not found"));
       }
 
+      if (channel.visibility === 'private' && req.user.role !== 'admin' && channel.createdBy !== req.user.federatedId) {
+        return next(createError(403, "This channel is private. Please request access instead."));
+      }
+
       await followChannelService(req.user.federatedId, channel);
 
       return res.status(200).json({
@@ -406,3 +411,245 @@ export const getChannelFollowers = async (req, res, next) => {
 
 
 
+// --- Private Channel Access Requests ---
+
+export const requestAccess = async (req, res, next) => {
+  try {
+    const channelInput = req.params.channelName;
+    const { isLocal, name, targetServer } = resolveChannelTarget(channelInput);
+
+    if (!isLocal) {
+      console.log("Cannot request federated access right now.");
+      return next(createError(400, "Federated access requests are not yet supported"));
+    }
+
+    const channel = await Channel.findOne({
+      name,
+      serverName: process.env.SERVER_NAME
+    });
+
+    if (!channel) {
+      console.log("Channel not found locally:", name);
+      return next(createError(404, "Channel not found"));
+    }
+
+    if (channel.visibility !== "private") {
+      console.log("Channel is not private:", channel.visibility);
+      return next(createError(400, "Access requests are only for private channels"));
+    }
+
+    // Check if user is already following
+    const existingFollow = await ChannelFollow.findOne({
+      userFederatedId: req.user.federatedId,
+      channelFederatedId: channel.federatedId
+    });
+
+    if (existingFollow) {
+      console.log("User is already following:", req.user.federatedId);
+      return next(createError(400, "You are already a member of this channel"));
+    }
+
+    // Check if request already exists
+    const existingRequest = await ChannelRequest.findOne({
+      channelFederatedId: channel.federatedId,
+      userFederatedId: req.user.federatedId
+    });
+
+    if (existingRequest) {
+      console.log("Existing request found. Status:", existingRequest.status);
+      if (existingRequest.status === "pending") {
+        return next(createError(400, "You already have a pending request for this channel"));
+      } else if (existingRequest.status === "rejected") {
+        // Allow re-requesting after rejection — delete old rejected request first
+        await ChannelRequest.deleteOne({ _id: existingRequest._id });
+      }
+    }
+    /*
+        console.log("Attempting to insert ChannelRequest into database:", {
+          channelFederatedId: channel.federatedId,
+          channelName: channel.name,
+          userFederatedId: req.user.federatedId,
+          userDisplayName: req.user.displayName
+        }); */
+
+    // Create request
+    const createdReq = await ChannelRequest.create({
+      channelFederatedId: channel.federatedId,
+      channelName: channel.name,
+      userFederatedId: req.user.federatedId,
+      userDisplayName: req.user.displayName
+    });
+
+    console.log("ChannelRequest created successfully:", createdReq._id);
+
+    res.status(200).json({
+      success: true,
+      message: "Access request submitted successfully"
+    });
+
+  } catch (err) {
+    console.error("Error creating channel request:", err);
+    next(err);
+  }
+};
+
+export const getPendingRequests = async (req, res, next) => {
+  try {
+    const channelInput = req.params.channelName;
+    const { isLocal, name } = resolveChannelTarget(channelInput);
+
+    if (!isLocal) {
+      return next(createError(400, "Cannot fetch requests for remote channel"));
+    }
+
+    const channel = await Channel.findOne({
+      name,
+      serverName: process.env.SERVER_NAME
+    });
+
+    if (!channel) {
+      return next(createError(404, "Channel not found"));
+    }
+
+    // Only channel creator (or admin) can view requests
+    if (channel.createdBy !== req.user.federatedId && req.user.role !== "admin") {
+      return next(createError(403, "Only the channel creator can view access requests"));
+    }
+
+    const requests = await ChannelRequest.find({
+      channelFederatedId: channel.federatedId,
+      status: "pending"
+    }).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      requests
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getAllPendingRequests = async (req, res, next) => {
+  try {
+    if (req.user.role !== "admin") {
+      return next(createError(403, "Only server admins can view all pending requests"));
+    }
+
+    const requests = await ChannelRequest.find({
+      status: "pending"
+    }).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      requests
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const checkRequestStatus = async (req, res, next) => {
+  try {
+    const channelInput = req.params.channelName;
+    const { isLocal, name } = resolveChannelTarget(channelInput);
+
+    if (!isLocal) {
+      return res.status(200).json({ success: true, status: "none" }); // Fallback
+    }
+
+    const channel = await Channel.findOne({ name, serverName: process.env.SERVER_NAME });
+    if (!channel) return next(createError(404, "Channel not found"));
+
+    const request = await ChannelRequest.findOne({
+      channelFederatedId: channel.federatedId,
+      userFederatedId: req.user.federatedId
+    });
+
+    res.status(200).json({
+      success: true,
+      status: request ? request.status : "none"
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+
+export const resolveAccessRequest = async (req, res, next) => {
+  try {
+    const channelInput = req.params.channelName;
+    const { isLocal, name } = resolveChannelTarget(channelInput);
+    const { userFederatedId, action } = req.body; // action: "approve" | "reject"
+
+    if (!userFederatedId || !["approve", "reject"].includes(action)) {
+      return next(createError(400, "Valid userFederatedId and action ('approve' or 'reject') are required"));
+    }
+
+    if (!isLocal) {
+      return next(createError(400, "Cannot resolve requests for remote channel"));
+    }
+
+    const channel = await Channel.findOne({
+      name,
+      serverName: process.env.SERVER_NAME
+    });
+
+    if (!channel) {
+      return next(createError(404, "Channel not found"));
+    }
+
+    // Only channel creator (or admin) can resolve requests
+    if (channel.createdBy !== req.user.federatedId && req.user.role !== "admin") {
+      return next(createError(403, "Only the channel creator can resolve access requests"));
+    }
+
+    const targetRequest = await ChannelRequest.findOne({
+      channelFederatedId: channel.federatedId,
+      userFederatedId,
+      status: "pending"
+    });
+
+    if (!targetRequest) {
+      return next(createError(404, "Pending request not found"));
+    }
+
+    if (action === "approve") {
+      // 1. Create a ChannelFollow
+      const existingFollow = await ChannelFollow.findOne({
+        userFederatedId,
+        channelFederatedId: channel.federatedId
+      });
+
+      if (!existingFollow) {
+        await ChannelFollow.create({
+          userFederatedId,
+          channelFederatedId: channel.federatedId,
+          channelName: channel.name,
+          serverName: channel.serverName,
+          userOriginServer: userFederatedId.split("@")[1] || process.env.SERVER_NAME, // Approximation for origin
+          channelOriginServer: channel.serverName
+        });
+      }
+
+      // 2. Mark as approved or delete request
+      // We will delete it here so they can request again if they leave
+      await ChannelRequest.deleteOne({ _id: targetRequest._id });
+
+    } else if (action === "reject") {
+      targetRequest.status = "rejected";
+      await targetRequest.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Request ${action}d successfully`
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
