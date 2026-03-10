@@ -88,6 +88,16 @@ export const getUserProfile = async (req, res, next) => {
           timeout: 5000
         }
       );
+
+      if (data.success && data.user) {
+        if (data.user.avatarUrl && data.user.avatarUrl.startsWith('/')) {
+          data.user.avatarUrl = `${trusted.serverUrl}${data.user.avatarUrl}`;
+        }
+        if (data.user.bannerUrl && data.user.bannerUrl.startsWith('/')) {
+          data.user.bannerUrl = `${trusted.serverUrl}${data.user.bannerUrl}`;
+        }
+      }
+
       return res.status(200).json(data);
     } catch (error) {
       return next(createError(502, "Failed to fetch remote user profile"));
