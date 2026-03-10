@@ -5,7 +5,7 @@ import { FiHash, FiLock, FiUsers } from 'react-icons/fi';
 import axios from 'axios';
 import '../../styles/Channels.css';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api");
 
 function Channels() {
   const [channels, setChannels] = useState([]);

@@ -1,0 +1,30 @@
+﻿node : file:///C:/Users/heman/OneDrive/Doc
+uments/SWE/backend/routes/userRoute.js:9
+At line:1 char:1
++ node index.js 2>&1 | Out-File -Encoding 
+utf8 error.log
++ ~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecifie 
+   d: (file:///C:/User.../userRoute.js:9  
+  :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeComma 
+   ndError
+ 
+router.get("/top", verifyToken, 
+getTopUsers);
+                                ^
+
+ReferenceError: getTopUsers is not defined
+    at file:///C:/Users/heman/OneDrive/Doc
+uments/SWE/backend/routes/userRoute.js:9:3
+3
+    at ModuleJob.run (node:internal/module
+s/esm/module_job:343:25)
+    at async 
+onImport.tracePromise.__proto__ 
+(node:internal/modules/esm/loader:647:26)
+    at async 
+asyncRunEntryPointWithESMLoader 
+(node:internal/modules/run_main:117:5)
+
+Node.js v22.18.0
