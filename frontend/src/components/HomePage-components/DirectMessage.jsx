@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import io from 'socket.io-client';
 import { FiX, FiSend, FiUser } from 'react-icons/fi';
@@ -8,6 +9,7 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:500
 const SOCKET_URL = (import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace("/api", "") : "http://localhost:5000");
 
 const DirectMessage = ({ onClose, initialTargetUser = null }) => {
+    const navigate = useNavigate();
     const [socket, setSocket] = useState(null);
     const [currentUser, setCurrentUser] = useState(null);
 
@@ -17,12 +19,19 @@ const DirectMessage = ({ onClose, initialTargetUser = null }) => {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(false);
+    const [blockInfo, setBlockInfo] = useState({ isBlocked: false, details: null });
 
     // Search
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
 
     const messagesEndRef = useRef(null);
+
+    const handleProfileClick = (user) => {
+        if (!user.federatedId) return;
+        onClose(); // Close the DM window
+        navigate(`/user/${encodeURIComponent(user.federatedId)}`);
+    };
 
     useEffect(() => {
         const userStr = localStorage.getItem('user');
@@ -51,8 +60,23 @@ const DirectMessage = ({ onClose, initialTargetUser = null }) => {
     useEffect(() => {
         if (activeChatUser) {
             fetchMessages(activeChatUser._id || activeChatUser.id);
+            checkBlockStatus(activeChatUser.federatedId || activeChatUser._id || activeChatUser.id);
         }
     }, [activeChatUser]);
+
+    const checkBlockStatus = async (targetId) => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await axios.get(`${API_BASE_URL}/blocks/${encodeURIComponent(targetId)}/check-both`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.data.success) {
+                setBlockInfo({ isBlocked: res.data.isBlocked, details: res.data.details });
+            }
+        } catch (err) {
+            console.error('Error checking block status:', err);
+        }
+    };
 
     useEffect(() => {
         // Auto-scroll to bottom of messages
@@ -170,7 +194,11 @@ const DirectMessage = ({ onClose, initialTargetUser = null }) => {
                             <div className="search-results">
                                 {searchResults.map(user => (
                                     <div key={user._id} className="search-user-item" onClick={() => selectUser(user)}>
-                                        <div className="user-avatar-sm">
+                                        <div
+                                            className="user-avatar-sm clickable"
+                                            onClick={(e) => { e.stopPropagation(); handleProfileClick(user); }}
+                                            style={{ cursor: 'pointer' }}
+                                        >
                                             {user.profilePicture ? <img src={user.profilePicture} alt="" /> : <FiUser />}
                                         </div>
                                         <span>{user.username}</span>
@@ -190,10 +218,14 @@ const DirectMessage = ({ onClose, initialTargetUser = null }) => {
                                 className={`contact-item ${activeChatUser?._id === user._id ? 'active' : ''}`}
                                 onClick={() => selectUser(user)}
                             >
-                                <div className="user-avatar-sm">
+                                <div
+                                    className="user-avatar-sm clickable"
+                                    onClick={(e) => { e.stopPropagation(); handleProfileClick(user); }}
+                                    style={{ cursor: 'pointer' }}
+                                >
                                     {user.profilePicture ? <img src={user.profilePicture} alt="" /> : <FiUser />}
                                 </div>
-                                <span>{user.username}</span>
+                                <span className="contact-name">{user.username}</span>
                             </div>
                         ))}
                     </div>
@@ -204,18 +236,36 @@ const DirectMessage = ({ onClose, initialTargetUser = null }) => {
                     {activeChatUser ? (
                         <>
                             <div className="chat-header">
-                                <div className="user-avatar-sm">
+                                <div
+                                    className="user-avatar-sm clickable"
+                                    onClick={() => handleProfileClick(activeChatUser)}
+                                    style={{ cursor: 'pointer' }}
+                                >
                                     {activeChatUser.profilePicture ? <img src={activeChatUser.profilePicture} alt="" /> : <FiUser />}
                                 </div>
-                                <strong>{activeChatUser.username}</strong>
+                                <strong
+                                    className="clickable"
+                                    onClick={() => handleProfileClick(activeChatUser)}
+                                    style={{ cursor: 'pointer' }}
+                                >
+                                    {activeChatUser.username}
+                                </strong>
                                 {activeChatUser.serverName && <span className="server-tag">@{activeChatUser.serverName}</span>}
                             </div>
 
                             <div className="chat-messages">
                                 {loading ? <p className="loading-msg">Loading...</p> : null}
 
-                                {messages.length === 0 && !loading && (
+                                {messages.length === 0 && !loading && !blockInfo.isBlocked && (
                                     <p className="empty-chat">No messages yet. Say hi!</p>
+                                )}
+
+                                {blockInfo.isBlocked && (
+                                    <p className="blocked-msg">
+                                        {blockInfo.details === 'you_blocked'
+                                            ? 'You have blocked this user. Unblock them to send messages.'
+                                            : 'Communication with this user is restricted.'}
+                                    </p>
                                 )}
 
                                 {messages.map((msg, idx) => {
@@ -234,9 +284,10 @@ const DirectMessage = ({ onClose, initialTargetUser = null }) => {
                                     type="text"
                                     value={newMessage}
                                     onChange={(e) => setNewMessage(e.target.value)}
-                                    placeholder="Type a message..."
+                                    placeholder={blockInfo.isBlocked ? "Messaging is disabled" : "Type a message..."}
+                                    disabled={blockInfo.isBlocked}
                                 />
-                                <button type="submit" disabled={!newMessage.trim()}>
+                                <button type="submit" disabled={!newMessage.trim() || blockInfo.isBlocked}>
                                     <FiSend />
                                 </button>
                             </form>
