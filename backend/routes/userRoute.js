@@ -1,6 +1,6 @@
 import express from 'express';
 import { verifyToken } from "../middleware/verifyToken.js";
-import { getUserProfile, searchUsers, followUser, unfollowUser, checkFollowStatus, getMyFollowers, getMyFollowing, getAllProfiles, getTopUsers, resetPassword, updateProfile, deleteAccount } from '../controllers/userController.js';
+import { getUserProfile, searchUsers, followUser, unfollowUser, checkFollowStatus, getMyFollowers, getMyFollowing, getAllProfiles, resetPassword, updateProfile, deleteAccount } from '../controllers/userController.js';
 
 const router = express.Router();
 
