@@ -85,6 +85,16 @@ export const unfollowUserService = async (
   );
 };
 
+/**
+ * Shared service for retrieving a user's profile data.
+ * Used by userController (local views) and federationFeedController (remote views).
+ */
+export const getUserProfileService = async (federatedId) => {
+  const userProfile = await User.findOne({ federatedId }).select("-password");
+  if (!userProfile) throw createError(404, "User not found");
+  return userProfile;
+};
+
 // ── Search & Discovery Logic ──────────────────
 
 import axios from "axios";

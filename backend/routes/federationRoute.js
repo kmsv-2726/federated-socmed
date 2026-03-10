@@ -1,9 +1,6 @@
 import Express from 'express';
 import { verifyToken } from '../middleware/verifyToken.js';
 import { verifyAdmin } from '../middleware/verifyAdmin.js';
-import { getPublicKey } from '../controllers/federationController.js';
-import { verifyFederationRequest } from '../middleware/verifyFederationRequest.js';
-import { federationInbox } from '../controllers/federationInboxController.js';
 import {
     getPublicKey,
     addTrustedServer,
@@ -33,6 +30,5 @@ import { getFederationStatus, toggleFederationStatus } from '../controllers/fede
 router.get("/status", verifyToken, verifyAdmin, getFederationStatus);
 router.put("/status", verifyToken, verifyAdmin, toggleFederationStatus);
 
-export default router;
 
 export default router;   

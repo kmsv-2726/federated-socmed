@@ -146,9 +146,13 @@
 }
 
 @keyframes spin {
+<<<<<<< HEAD
   to {
     transform: rotate(360deg);
   }
+=======
+  to { transform: rotate(360deg); }
+>>>>>>> feature/direct-messaging
 }
 
 /* ── Error ── */
@@ -338,6 +342,7 @@
   font-size: 11px;
   color: #6366f1;
 }
+<<<<<<< HEAD
 
 .search-result-actions {
   display: flex;
@@ -673,3 +678,5 @@
 .list-loading .search-spinner {
   margin: 0 auto 12px;
 }
+=======
+>>>>>>> feature/direct-messaging

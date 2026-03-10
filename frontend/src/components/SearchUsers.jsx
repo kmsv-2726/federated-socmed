@@ -44,7 +44,7 @@ const SearchUsers = () => {
         try {
             const token = localStorage.getItem('token');
             const res = await fetch(
-                `${API_BASE_URL}/user/search?q=${encodeURIComponent(searchQuery.trim())}&limit=20`,
+                `${API_BASE_URL}/search/users?q=${encodeURIComponent(searchQuery.trim())}&limit=20`,
                 {
                     method: 'GET',
                     headers: { 'Authorization': `Bearer ${token}` }

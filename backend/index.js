@@ -2,6 +2,9 @@ import express from "express"
 import dotenv from "dotenv"
 import mongoose from "mongoose"
 import cors from "cors"
+
+import { createServer } from "http"
+import { Server } from "socket.io"
 import authRoute from "./routes/authRoute.js"
 import postRoute from "./routes/postRoute.js"
 import channelRoute from "./routes/channelRoute.js"
@@ -9,11 +12,42 @@ import userRoute from "./routes/userRoute.js"
 import reportRoute from "./routes/reportRoute.js"
 import federationRout from "./routes/federationRoute.js"
 import serverConfigRoute from "./routes/serverConfigRoute.js"
+import messageRoute from "./routes/messageRoute.js"
 import ServerConfig from "./models/ServerConfig.js"
+import searchRoute from "./routes/searchRoute.js"
 
 dotenv.config()
 
 const app = express()
+const httpServer = createServer(app)
+export const io = new Server(httpServer, {
+  cors: {
+    origin: ["http://localhost:5173", "http://localhost:3000"],
+    credentials: true
+  }
+})
+
+// Store online users
+export const onlineUsers = new Map()
+
+io.on("connection", (socket) => {
+  console.log(`User connected: ${socket.id}`)
+
+  socket.on("register", (userId) => {
+    onlineUsers.set(userId, socket.id)
+    console.log(`User ${userId} registered with socket ${socket.id}`)
+  })
+
+  socket.on("disconnect", () => {
+    console.log(`User disconnected: ${socket.id}`)
+    for (let [key, value] of onlineUsers.entries()) {
+      if (value === socket.id) {
+        onlineUsers.delete(key)
+        break
+      }
+    }
+  })
+})
 
 app.use(cors({
   origin: ["http://localhost:5173", "http://localhost:3000"],
@@ -31,6 +65,8 @@ app.use("/api/channels", channelRoute)
 app.use("/api/reports", reportRoute)
 app.use("/api/federation", federationRout)
 app.use("/api/server-config", serverConfigRoute)
+app.use("/api/messages", messageRoute)
+app.use("/api/search", searchRoute)
 
 app.use((err, req, res, next) => {
   const errorStatus = err.status || 500
@@ -59,7 +95,7 @@ mongoose.connect(process.env.MONGO_URL)
       console.error("Failed to initialize server config:", err);
     }
 
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`)
     })
   })

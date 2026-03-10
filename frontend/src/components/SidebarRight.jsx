@@ -6,9 +6,11 @@ import {
   FiBookOpen
 } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
+import DirectMessage from './HomePage-components/DirectMessage';
 
 const SidebarRight = () => {
   const [followedChannels, setFollowedChannels] = useState([]);
+  const [showDirectMessage, setShowDirectMessage] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const API_BASE_URL = "http://localhost:5000/api";
@@ -107,6 +109,20 @@ const SidebarRight = () => {
           ))
         )}
       </div>
+
+      <div className="widget" style={{ marginTop: '20px' }}>
+        <h3>Direct Messages</h3>
+        <button
+          onClick={() => setShowDirectMessage(true)}
+          style={{ width: '100%', padding: '10px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', marginTop: '10px' }}
+        >
+          Open Messages
+        </button>
+      </div>
+
+      {showDirectMessage && (
+        <DirectMessage onClose={() => setShowDirectMessage(false)} />
+      )}
 
     </aside>
   );
