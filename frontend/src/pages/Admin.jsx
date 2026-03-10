@@ -24,6 +24,7 @@ const Admin = () => {
   const [channelsList, setChannelsList] = useState([]);
   const [reportsList, setReportsList] = useState([]);
   const [serversList, setServersList] = useState([]);
+  const [activitiesList, setActivitiesList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -62,13 +63,14 @@ const Admin = () => {
           headers: { Authorization: `Bearer ${token}` }
         };
 
-        const [usersRes, postsRes, channelsRes, reportsRes, serversRes, federationRes] = await Promise.allSettled([
+        const [usersRes, postsRes, channelsRes, reportsRes, serversRes, federationRes, activitiesRes] = await Promise.allSettled([
           axios.get(`${API_BASE_URL}/user`, config),
           axios.get(`${API_BASE_URL}/posts`, config),
           axios.get(`${API_BASE_URL}/channels`, config),
           axios.get(`${API_BASE_URL}/reports?limit=100`, config),
           axios.get(`${API_BASE_URL}/servers`, config),
-          axios.get(`${API_BASE_URL}/federation/status`, config).catch(() => ({ data: { isEnabled: true } }))
+          axios.get(`${API_BASE_URL}/federation/status`, config).catch(() => ({ data: { isEnabled: true } })),
+          axios.get(`${API_BASE_URL}/activities`, config).catch(() => ({ data: { activities: [] } }))
         ]);
 
         let usedMock = false;
@@ -104,6 +106,10 @@ const Admin = () => {
           setGlobalFederationEnabled(federationRes.value.data.isEnabled !== false);
         }
 
+        if (activitiesRes && activitiesRes.status === 'fulfilled' && activitiesRes.value.data) {
+          setActivitiesList(activitiesRes.value.data.activities || []);
+        }
+
         if (usedMock || usersRes.status === 'rejected' || postsRes.status === 'rejected') {
           throw new Error("Backend unavailable, switching to mock data");
         }
@@ -134,7 +140,17 @@ const Admin = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        await axios.post(`${API_BASE_URL}/auth/logout`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     navigate('/auth');
@@ -485,11 +501,10 @@ const Admin = () => {
                 </div>
               </div>
 
-              {/* Recent Users Table */}
+              {/* Recent Activity Table */}
               <section className="admin-section">
                 <div className="section-header">
-                  <h2 className="section-h2">Recent User Registrations</h2>
-                  <button className="action-btn-sm" onClick={() => setActiveTab('users')}>View All</button>
+                  <h2 className="section-h2">Recent Login/Logout Activity</h2>
                 </div>
 
                 <table className="admin-table">
@@ -497,23 +512,24 @@ const Admin = () => {
                     <tr>
                       <th>Username</th>
                       <th>Federated ID</th>
-                      <th>Actions</th>
+                      <th>Action</th>
+                      <th>Time</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {usersList.slice(0, 5).map(user => (
-                      <tr key={user._id || user.federatedId}>
+                    {activitiesList.slice(0, 5).map(activity => (
+                      <tr key={activity._id}>
+                        <td>{activity.username}</td>
+                        <td>{activity.federatedId}</td>
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            {user.avatarUrl && <img src={user.avatarUrl} alt="" style={{ width: '24px', height: '24px', borderRadius: '50%' }} />}
-                            {user.displayName}
-                          </div>
+                          <span className={`status-badge`} style={{ backgroundColor: activity.action === 'LOGIN' ? '#d1fae5' : '#fee2e2', color: activity.action === 'LOGIN' ? '#065f46' : '#991b1b' }}>
+                            {activity.action}
+                          </span>
                         </td>
-                        <td>{user.federatedId}</td>
-                        <td><button className="action-btn-sm" onClick={() => manageUser(user.displayName)}>Manage</button></td>
+                        <td>{formatTimeAgo(activity.createdAt)}</td>
                       </tr>
                     ))}
-                    {usersList.length === 0 && <tr><td colSpan="3">No users found.</td></tr>}
+                    {activitiesList.length === 0 && <tr><td colSpan="4">No recent activity.</td></tr>}
                   </tbody>
                 </table>
               </section>
