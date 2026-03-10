@@ -2,17 +2,20 @@ import React, { useState, useEffect } from 'react';
 import TimelineTabs from '../components/TimelineTabs';
 import PostCreator from '../components/PostCreator';
 import PostList from '../components/PostList';
+import SearchUsers from '../components/SearchUsers';
 import Layout from '../components/Layout';
 import '../styles/Home.css';
 
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api");
 
 function Home() {
   const [activeTimeline, setActiveTimeline] = useState('home');
   const [posts, setPosts] = useState([]);
+  const [followingPosts, setFollowingPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // fetch all local posts (for the "Local" tab)
   const fetchPosts = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -39,24 +42,13 @@ function Home() {
     }
   };
 
-  useEffect(() => {
-    fetchPosts();
-  }, []);
-
-  const handleTimelineChange = (timeline) => {
-    setActiveTimeline(timeline);
-  };
-
-  const handlePostCreated = (newPost) => {
-    setPosts([newPost, ...posts]);
-  };
-
-  const handleLikePost = async (postId) => {
+  // fetch personalised timeline (local + remote followed users & channels) for the "Home" tab
+  const fetchFollowingPosts = async () => {
     try {
       const token = localStorage.getItem('token');
 
-      const res = await fetch(`${API_BASE_URL}/posts/like/${postId}`, {
-        method: 'PUT',
+      const res = await fetch(`${API_BASE_URL}/posts/timeline`, {
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -65,34 +57,74 @@ function Home() {
       const data = await res.json();
 
       if (data.success) {
-        setPosts(posts.map(post =>
-          post._id === postId
+        setFollowingPosts(data.posts);
+      }
+    } catch (err) {
+      console.error('Error fetching timeline posts:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchPosts();
+    fetchFollowingPosts();
+  }, []);
+
+  const handleTimelineChange = (timeline) => {
+    setActiveTimeline(timeline);
+  };
+
+  const handlePostCreated = (newPost) => {
+    setPosts([newPost, ...posts]);
+    setFollowingPosts([newPost, ...followingPosts]);
+  };
+
+  const handleLikePost = async (postFederatedId) => {
+    try {
+      const token = localStorage.getItem('token');
+
+      const res = await fetch(`${API_BASE_URL}/posts/like/`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ postFederatedId })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        const updateLike = post =>
+          post.federatedId === postFederatedId
             ? { ...post, likeCount: data.likeCount, liked: data.liked }
-            : post
-        ));
+            : post;
+        setPosts(posts.map(updateLike));
+        setFollowingPosts(followingPosts.map(updateLike));
       }
     } catch (err) {
       console.error('Error liking post:', err);
     }
   };
 
+  const handleDeletePost = (postId) => {
+    setPosts(posts.filter(p => p._id !== postId));
+    setFollowingPosts(followingPosts.filter(p => p._id !== postId));
+  };
+
   const getFilteredPosts = () => {
     switch (activeTimeline) {
       case 'home':
+        return followingPosts;
       case 'local':
         return posts;
-      case 'federated':
-        return []; // to change later when we integrate federation
       default:
-        return posts;
+        return followingPosts;
     }
   };
 
   return (
     <Layout>
-      <div className="search-bar">
-        <input type="text" placeholder="Type in search" />
-      </div>
+      <SearchUsers />
 
       <TimelineTabs
         activeTimeline={activeTimeline}
@@ -110,7 +142,8 @@ function Home() {
           posts={getFilteredPosts()}
           onLike={handleLikePost}
           activeTimeline={activeTimeline}
-          onDeletePost={(postId) => setPosts(posts.filter(p => p._id !== postId))}
+          onDeletePost={handleDeletePost}
+          onFollowChanged={fetchFollowingPosts}
         />
       )}
     </Layout>

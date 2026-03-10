@@ -11,7 +11,9 @@ import Admin from './pages/Admin';
 import ChannelPage from './pages/ChannelPage';
 import HelpCenter from './pages/HelpCenter';
 import SupportForm from './pages/SupportForm';
+import UserProfile from './pages/UserProfile';
 import UnlockAccount from './pages/UnlockAccount';
+import SearchPage from './pages/SearchPage';
 import './styles/app.css';
 
 const isAuthenticated = () => {
@@ -50,6 +52,11 @@ function App() {
                     <Profile />
                 </ProtectedRoute>
             } />
+            <Route path="/user/:federatedId" element={
+                <ProtectedRoute>
+                    <UserProfile />
+                </ProtectedRoute>
+            } />
             <Route path="/channels" element={
                 <ProtectedRoute>
                     <Channels />
@@ -68,6 +75,11 @@ function App() {
             <Route path="/settings" element={
                 <ProtectedRoute>
                     <Settings />
+                </ProtectedRoute>
+            } />
+            <Route path="/search" element={
+                <ProtectedRoute>
+                    <SearchPage />
                 </ProtectedRoute>
             } />
             <Route path="/landing" element={<LandingPage />} />

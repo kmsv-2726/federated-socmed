@@ -16,10 +16,18 @@ import axios from "axios";
 
 export const createPost = async (req, res, next) => {
   try {
-    const { description, image, isChannelPost, channelName } = req.body;
+    const { description, image, images, isChannelPost, channelName } = req.body;
 
     if (!description || description.trim() === "") {
       return next(createError(400, "Post description is required"));
+    }
+
+    // handle images - support both single image and array
+    let imageList = [];
+    if (images && Array.isArray(images)) {
+      imageList = images.slice(0, 4); // max 4
+    } else if (image) {
+      imageList = [image];
     }
 
     const isUserPost = !isChannelPost;
@@ -111,7 +119,8 @@ export const createPost = async (req, res, next) => {
     // Local Case: User Post or Local Channel Post
     const savedPost = await createPostService({
       description: description.trim(),
-      image,
+      image: imageList.length > 0 ? imageList[0] : null,
+      images: imageList,
       isUserPost,
       userDisplayName: req.user.displayName,
       authorFederatedId: req.user.federatedId,

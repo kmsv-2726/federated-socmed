@@ -1,7 +1,8 @@
 import User from "../models/User.js";
 import UserFollow from "../models/UserFollow.js";
+import Post from "../models/Post.js";
+import bcrypt from "bcryptjs";
 import { createError } from "../utils/error.js";
-import bcrypt from "bcrypt";
 import {
   followUserService,
   unfollowUserService
@@ -30,6 +31,24 @@ export const getAllProfiles = async (req, res, next) => {
       {},
       { displayName: 1, avatarUrl: 1, federatedId: 1, followersCount: 1, followingCount: 1 }
     );
+
+    res.status(200).json({
+      success: true,
+      users
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export const getTopUsers = async (req, res, next) => {
+  try {
+    const users = await User.find(
+      {},
+      { displayName: 1, avatarUrl: 1, federatedId: 1, followersCount: 1 }
+    )
+      .sort({ followersCount: -1 })
+      .limit(5);
 
     res.status(200).json({
       success: true,
@@ -255,6 +274,39 @@ export const getMyFollowing = async (req, res, next) => {
 };
 
 
+// update profile fields (displayName, email, dob)
+export const updateProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.federatedId;
+    const { displayName, email, dob } = req.body;
+
+    const updateFields = {};
+    if (displayName) updateFields.displayName = displayName;
+    if (email) updateFields.email = email;
+    if (dob) updateFields.dob = new Date(dob);
+    if (req.body.bannerUrl !== undefined) updateFields.bannerUrl = req.body.bannerUrl;
+
+    const updatedUser = await User.findOneAndUpdate(
+      { federatedId: userId },
+      { $set: updateFields },
+      { new: true, select: '-password' }
+    );
+
+    if (!updatedUser) {
+      return next(createError(404, "User not found"));
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      user: updatedUser
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// change password
 export const resetPassword = async (req, res, next) => {
   try {
     const { oldPassword, newPassword } = req.body;
@@ -291,4 +343,63 @@ export const resetPassword = async (req, res, next) => {
   }
 };
 
+// delete account and all associated data on local server
+export const deleteAccount = async (req, res, next) => {
+  try {
+    const userId = req.user.federatedId;
+
+    // delete user's posts on local server
+    await Post.deleteMany({ federatedId: { $regex: `^${userId}` } });
+
+    // remove follow relationships
+    await UserFollow.deleteMany({
+      $or: [
+        { followerFederatedId: userId },
+        { followingFederatedId: userId }
+      ]
+    });
+
+    // delete the user
+    await User.findOneAndDelete({ federatedId: userId });
+
+    res.status(200).json({
+      success: true,
+      message: "Account deleted successfully"
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const searchUsers = async (req, res, next) => {
+  try {
+    const { q } = req.query;
+    if (!q) {
+      return res.status(200).json({ success: true, users: [] });
+    }
+
+    // Attempt to split query in case it comes through as "username:0:0"
+    const parsedQuery = q.split(':')[0].trim();
+
+    let users = await User.find(
+      { displayName: { $regex: new RegExp(parsedQuery, 'i') } },
+      { displayName: 1, avatarUrl: 1, serverName: 1 }
+    ).limit(10);
+
+    // Map to the shape expected by DirectMessage.jsx
+    users = users.map(u => ({
+      _id: u._id,
+      username: u.displayName,
+      profilePicture: u.avatarUrl,
+      serverName: u.serverName
+    }));
+
+    res.status(200).json({
+      success: true,
+      users
+    });
+  } catch (err) {
+    next(err);
+  }
+};
 

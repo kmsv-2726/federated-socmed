@@ -7,44 +7,44 @@ import {
   FiX
 } from 'react-icons/fi';
 
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api");
 
 const PostCreator = ({ onPostCreated, isChannelPost = false, channelName = null }) => {
   const [postContent, setPostContent] = useState('');
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedImages, setSelectedImages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef(null);
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const emojis = ['😀','😂','😍','👍','🔥','🎉','🙏','🏆','🍕','⚽'];
+  const textareaRef = useRef(null);
 
   const handleImageClick = () => {
     fileInputRef.current.click();
   };
 
   const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) { // 10MB limit
-        setError('Image is too large. Max 10MB.');
+    const files = Array.from(e.target.files);
+    if (selectedImages.length + files.length > 4) {
+      setError('Maximum 4 images allowed per post.');
+      return;
+    }
+    files.forEach(file => {
+      if (file.size > 10 * 1024 * 1024) {
+        setError('One or more images are too large. Max 10MB each.');
         return;
       }
       const reader = new FileReader();
       reader.onloadend = () => {
-        setSelectedImage(reader.result);
+        setSelectedImages(prev => [...prev, reader.result].slice(0, 4));
         setError('');
       };
       reader.readAsDataURL(file);
-    }
+    });
   };
 
-  const removeImage = () => {
-    setSelectedImage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+  const removeImage = (index) => {
+    setSelectedImages(prev => prev.filter((_, i) => i !== index));
   };
 
   const addLinkToContent = () => {
@@ -64,13 +64,8 @@ const PostCreator = ({ onPostCreated, isChannelPost = false, channelName = null 
     }
   };
 
-  const addEmoji = (emoji) => {
-    setPostContent(prev => `${prev}${emoji}`);
-    setShowEmojiPicker(false);
-  };
-
   const handleCreatePost = async () => {
-    if (!postContent.trim() && !selectedImage) return;
+    if (!postContent.trim() && selectedImages.length === 0) return;
 
     setLoading(true);
     setError('');
@@ -88,7 +83,7 @@ const PostCreator = ({ onPostCreated, isChannelPost = false, channelName = null 
           description: postContent.trim(),
           isChannelPost: isChannelPost,
           channelName: channelName,
-          image: selectedImage
+          images: selectedImages
         })
       });
 
@@ -96,7 +91,7 @@ const PostCreator = ({ onPostCreated, isChannelPost = false, channelName = null 
 
       if (data.success) {
         setPostContent('');
-        setSelectedImage(null);
+        setSelectedImages([]);
         if (onPostCreated) {
           onPostCreated(data.post);
         }
@@ -130,15 +125,25 @@ const PostCreator = ({ onPostCreated, isChannelPost = false, channelName = null 
           onChange={(e) => { setPostContent(e.target.value); setError(''); }}
           onKeyPress={handleKeyPress}
           disabled={loading}
+          ref={textareaRef}
         />
       </div>
 
-      {selectedImage && (
-        <div className="image-preview-container">
-          <img src={selectedImage} alt="Preview" className="preview-image" />
-          <button className="remove-image-btn" onClick={removeImage}>
-            <FiX />
-          </button>
+      {selectedImages.length > 0 && (
+        <div className="image-preview-grid">
+          {selectedImages.map((img, i) => (
+            <div key={i} className="image-preview-item">
+              <img src={img} alt="Preview" className="preview-image" />
+              <button className="remove-image-btn" onClick={() => removeImage(i)}>
+                <FiX />
+              </button>
+            </div>
+          ))}
+          {selectedImages.length < 4 && (
+            <button className="add-more-images" onClick={handleImageClick}>
+              <FiImage /> Add More
+            </button>
+          )}
         </div>
       )}
 
@@ -151,18 +156,15 @@ const PostCreator = ({ onPostCreated, isChannelPost = false, channelName = null 
             ref={fileInputRef}
             onChange={handleImageChange}
             accept="image/*"
+            multiple
             style={{ display: 'none' }}
           />
           <button className="action-btn" title="Add image" onClick={handleImageClick}>
             <FiImage />
           </button>
 
-          <button className="action-btn" title="Add link" onClick={() => { setShowLinkInput(!showLinkInput); setShowEmojiPicker(false); }}>
+          <button className="action-btn" title="Add link" onClick={() => setShowLinkInput(!showLinkInput)}>
             <FiLink />
-          </button>
-
-          <button className="action-btn" title="Add emoji" onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowLinkInput(false); }}>
-            <FiSmile />
           </button>
         </div>
 
@@ -178,25 +180,10 @@ const PostCreator = ({ onPostCreated, isChannelPost = false, channelName = null 
           </div>
         )}
 
-        {showEmojiPicker && (
-          <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
-            {emojis.map(e => (
-              <button
-                key={e}
-                className="action-btn"
-                style={{ width: 36, height: 36, borderRadius: 8, fontSize: 18 }}
-                onClick={() => addEmoji(e)}
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-        )}
-
         <button
           className="post-btn"
           onClick={handleCreatePost}
-          disabled={loading || (!postContent.trim() && !selectedImage)}
+          disabled={loading || (!postContent.trim() && selectedImages.length === 0)}
         >
           {loading ? 'Posting...' : 'Post'}
         </button>

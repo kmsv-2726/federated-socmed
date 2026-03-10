@@ -71,6 +71,11 @@
   object-fit: cover;
 }
 
+.hero-text {
+  padding-bottom: 4px;
+  /* Align text nicely next to avatar */
+}
+
 .hero-text h1 {
   font-size: 24px;
   font-weight: 800;

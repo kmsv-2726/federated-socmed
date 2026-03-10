@@ -3,10 +3,11 @@ import { useParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import PostCreator from '../components/PostCreator';
 import PostList from '../components/PostList';
-import { FiHash, FiLock, FiUsers } from 'react-icons/fi';
+import { FiHash, FiLock, FiUsers, FiAlertCircle } from 'react-icons/fi';
 import '../styles/ChannelPage.css';
+import { canPostInChannel, canViewChannelContent } from '../utils/rbac';
 
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api");
 
 const ChannelPage = () => {
   const { channelName } = useParams();
@@ -67,7 +68,17 @@ const ChannelPage = () => {
       });
       const data = await res.json();
       if (data.success) {
-        setCurrentChannel(data.channel);
+        let channelObj = null;
+        if (data.channel) {
+          channelObj = data.channel;
+        } else if (data.channels) {
+          if (Array.isArray(data.channels)) {
+            channelObj = data.channels.find(c => c.name === name) || data.channels[0];
+          } else {
+            channelObj = data.channels;
+          }
+        }
+        setCurrentChannel(channelObj);
       }
     } catch (err) {
       console.error('Error fetching channel details:', err);
@@ -224,19 +235,23 @@ const ChannelPage = () => {
           )}
         </div>
 
-        {/* Create Post Section */}
-        {(currentChannel?.visibility === 'public' ||
-          (currentChannel?.visibility === 'read-only' && userRole === 'admin')) ? (
+        {/* Create Post Section - RBAC enforced */}
+        {canPostInChannel({ role: userRole }, currentChannel, isFollowing) ? (
           <PostCreator
             isChannelPost={true}
             channelName={decodedChannelName}
             onPostCreated={(newPost) => setPosts([newPost, ...posts])}
           />
         ) : (
-          <div className="empty-state" style={{ marginBottom: '16px' }}>
-            {currentChannel?.visibility === 'private'
-              ? 'This channel is private. You cannot post here.'
-              : 'This channel is read-only.'}
+          <div className="empty-state channel-restricted-msg">
+            <FiAlertCircle size={20} />
+            <span>
+              {currentChannel?.visibility === 'read-only' 
+                ? 'This channel is read-only. Only admins can post here.' 
+                : currentChannel?.visibility === 'private' && !isFollowing
+                  ? 'Join this community to participate in discussions.'
+                  : 'You do not have permission to post in this channel.'}
+            </span>
           </div>
         )}
 
@@ -245,9 +260,11 @@ const ChannelPage = () => {
           <div className="loading-state">Loading posts...</div>
         ) : error ? (
           <div className="empty-state" style={{ color: '#dc2626' }}>{error}</div>
-        ) : currentChannel?.visibility === 'private' && !isFollowing && userRole !== 'admin' ? (
+        ) : !canViewChannelContent({ role: userRole }, currentChannel, isFollowing) ? (
           <div className="empty-state">
-            This is a private channel. Request access to view posts.
+            <FiLock size={48} style={{ marginBottom: '16px', color: '#6b7280' }} />
+            <h3>This is a private community</h3>
+            <p>Request access or join to view discussions and posts.</p>
           </div>
         ) : (
           <PostList

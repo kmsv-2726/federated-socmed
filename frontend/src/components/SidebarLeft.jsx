@@ -8,8 +8,12 @@ import {
   FiServer,
   FiLogOut,
   FiShield,
-  FiHelpCircle
+  FiHelpCircle,
+  FiSearch
 } from 'react-icons/fi';
+import axios from 'axios';
+
+const API_BASE_URL = "http://localhost:5000/api";
 
 const SidebarLeft = () => {
   const navigate = useNavigate();
@@ -36,7 +40,17 @@ const SidebarLeft = () => {
     return location.pathname === path;
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        await axios.post(`${API_BASE_URL}/auth/logout`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     navigate('/auth');
@@ -52,6 +66,13 @@ const SidebarLeft = () => {
           onClick={() => handleNavClick('/')}
         >
           <FiHome className="icon" /> Home
+        </button>
+
+        <button
+          className={`nav-item ${isActive('/search') ? 'active' : ''}`}
+          onClick={() => handleNavClick('/search')}
+        >
+          <FiSearch className="icon" /> Search
         </button>
         <button
           className={`nav-item ${isActive('/profile') ? 'active' : ''}`}
@@ -85,12 +106,6 @@ const SidebarLeft = () => {
             <FiShield className="icon" /> Admin
           </button>
         )}
-        <button
-          className={`nav-item ${isActive('/help-center') ? 'active' : ''}`}
-          onClick={() => handleNavClick('/help-center')}
-        >
-          <FiHelpCircle className="icon" /> Help Center
-        </button>
         <button
           className="nav-item logout-btn"
           onClick={handleLogout}

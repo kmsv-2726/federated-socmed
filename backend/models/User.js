@@ -49,6 +49,11 @@ const userSchema = new mongoose.Schema(
       default: null
     },
 
+    bannerUrl: {
+      type: String,
+      default: null
+    },
+
     serverName: {
       type: String,
       required: true
