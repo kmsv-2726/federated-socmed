@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiThumbsUp, FiMessageCircle, FiShare2, FiMoreHorizontal, FiTrash2 } from 'react-icons/fi';
+import { FiThumbsUp, FiMessageCircle, FiShare2, FiMoreHorizontal, FiTrash2, FiSend, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api");
+const API_BASE_URL = "http://localhost:5000/api";
 
 const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [openCommentsId, setOpenCommentsId] = useState(null);
+  const [commentInputs, setCommentInputs] = useState({});   // { postId: string }
+  const [commentLoading, setCommentLoading] = useState({}); // { postId: bool }
+  const [localComments, setLocalComments] = useState({});   // { postId: [comment, ...] }
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -18,6 +22,20 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
       }
     }
   }, []);
+
+  // Seed localComments from props when posts change
+  useEffect(() => {
+    if (!posts) return;
+    setLocalComments(prev => {
+      const next = { ...prev };
+      posts.forEach(post => {
+        if (!next[post._id]) {
+          next[post._id] = Array.isArray(post.comments) ? post.comments : [];
+        }
+      });
+      return next;
+    });
+  }, [posts]);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -34,6 +52,69 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
     setOpenMenuId(openMenuId === postId ? null : postId);
   };
 
+  const toggleComments = (postId) => {
+    setOpenCommentsId(openCommentsId === postId ? null : postId);
+  };
+
+  const handleCommentInput = (postId, value) => {
+    setCommentInputs(prev => ({ ...prev, [postId]: value }));
+  };
+
+  const handleSubmitComment = async (post) => {
+    const content = (commentInputs[post._id] || '').trim();
+    if (!content) return;
+
+    setCommentLoading(prev => ({ ...prev, [post._id]: true }));
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/posts/comment/`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          postFederatedId: post.federatedId,
+          content
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Optimistically add comment to local state
+        const newComment = {
+          displayName: currentUser?.displayName || 'You',
+          image: currentUser?.image || null,
+          content,
+          commentFederatedId: data.commentFederatedId,
+          originServer: currentUser?.serverName,
+          createdAt: new Date().toISOString()
+        };
+        setLocalComments(prev => ({
+          ...prev,
+          [post._id]: [...(prev[post._id] || []), newComment]
+        }));
+        setCommentInputs(prev => ({ ...prev, [post._id]: '' }));
+      } else {
+        alert(data.message || 'Failed to post comment');
+      }
+    } catch (err) {
+      console.error('Error posting comment:', err);
+      alert('Failed to post comment. Please try again.');
+    } finally {
+      setCommentLoading(prev => ({ ...prev, [post._id]: false }));
+    }
+  };
+
+  const handleKeyDown = (e, post) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmitComment(post);
+    }
+  };
+
   const handleDelete = async (postId) => {
     if (!window.confirm('Are you sure you want to delete this post?')) return;
 
@@ -48,9 +129,7 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
 
       const data = await response.json();
       if (data.success) {
-        if (onDeletePost) {
-          onDeletePost(postId);
-        }
+        if (onDeletePost) onDeletePost(postId);
         setOpenMenuId(null);
       } else {
         alert(data.message || 'Failed to delete post');
@@ -63,9 +142,7 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
 
   const isOwnPost = (post) => {
     if (!currentUser) return false;
-    // Admins can delete any post
     if (currentUser.role === 'admin') return true;
-    // Check if the post belongs to the current user
     return post.federatedId?.includes(currentUser.federatedId) ||
       post.userDisplayName === currentUser.displayName;
   };
@@ -83,12 +160,7 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
 
   const getInitials = (name) => {
     if (!name) return '??';
-    return name
-      .split(' ')
-      .map(word => word[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
+    return name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2);
   };
 
   if (!posts || posts.length === 0) {
@@ -103,84 +175,158 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
 
   return (
     <div className="posts-feed">
-      {posts.map((post) => (
-        <div key={post._id} className="post">
-          <div className="post-header">
-            <div className="post-author">
-              <div className="user-avatar">
-                {getInitials(post.userDisplayName || post.author)}
+      {posts.map((post) => {
+        const comments = localComments[post._id] || [];
+        const commentCount = comments.length;
+        const isCommentsOpen = openCommentsId === post._id;
+
+        return (
+          <div key={post._id} className="post">
+            {/* ── Header ── */}
+            <div className="post-header">
+              <div className="post-author">
+                <div className="user-avatar">
+                  {getInitials(post.userDisplayName || post.author)}
+                </div>
+                <div>
+                  <div className="author-name">
+                    {post.userDisplayName || post.author || 'Anonymous'}
+                    {post.isChannelPost && post.channelName && (
+                      <span className="post-channel-link"> in #{post.channelName}</span>
+                    )}
+                  </div>
+                  <div className="post-time">
+                    {formatTime(post.createdAt)}
+                    {post.serverName && (
+                      <span className="post-server-tag"> • {post.serverName}</span>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div>
-                <div className="author-name">
-                  {post.userDisplayName || post.author || 'Anonymous'}
-                  {post.isChannelPost && post.channelName && (
-                    <span className="post-channel-link"> in #{post.channelName}</span>
-                  )}
-                </div>
-                <div className="post-time">
-                  {formatTime(post.createdAt)}
-                  {post.serverName && <span className="post-server-tag"> • {post.serverName}</span>}
-                </div>
+
+              <div className="post-menu-container" ref={openMenuId === post._id ? menuRef : null}>
+                <button className="post-menu" onClick={() => toggleMenu(post._id)}>
+                  <FiMoreHorizontal />
+                </button>
+                {openMenuId === post._id && (
+                  <div className="post-dropdown-menu">
+                    {isOwnPost(post) ? (
+                      <button
+                        className="dropdown-item delete-item"
+                        onClick={() => handleDelete(post._id)}
+                      >
+                        <FiTrash2 /> Delete Post
+                      </button>
+                    ) : (
+                      <div className="dropdown-item disabled">No actions available</div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-            <div className="post-menu-container" ref={openMenuId === post._id ? menuRef : null}>
-              <button className="post-menu" onClick={() => toggleMenu(post._id)}>
-                <FiMoreHorizontal />
+
+            {/* ── Content ── */}
+            <div className="post-content">{post.description || post.content}</div>
+
+            {post.image && (
+              <div className="post-images">
+                <img src={post.image} alt="" />
+              </div>
+            )}
+
+            {/* ── Footer ── */}
+            <div className="post-footer">
+              <button className="post-action" onClick={() => onLike(post._id)}>
+                <FiThumbsUp className="action-icon" />
+                <span>Like</span>
+                {(post.likeCount > 0 || post.likes > 0) && (
+                  <span className="count">{post.likeCount || post.likes}</span>
+                )}
               </button>
-              {openMenuId === post._id && (
-                <div className="post-dropdown-menu">
-                  {isOwnPost(post) && (
+
+              <button className="post-action" onClick={() => toggleComments(post._id)}>
+                <FiMessageCircle className="action-icon" />
+                <span>Comment</span>
+                {commentCount > 0 && <span className="count">{commentCount}</span>}
+                {isCommentsOpen
+                  ? <FiChevronUp style={{ marginLeft: 4, fontSize: 12 }} />
+                  : <FiChevronDown style={{ marginLeft: 4, fontSize: 12 }} />
+                }
+              </button>
+
+              <button className="post-action">
+                <FiShare2 className="action-icon" />
+                <span>Share</span>
+                {post.shares > 0 && <span className="count">{post.shares}</span>}
+              </button>
+            </div>
+
+            {/* ── Comments Section ── */}
+            {isCommentsOpen && (
+              <div className="comments-section">
+
+                {/* Existing comments */}
+                {commentCount > 0 ? (
+                  <div className="comments-list">
+                    {comments.map((comment, idx) => (
+                      <div key={comment.commentFederatedId || idx} className="comment">
+                        <div className="comment-avatar">
+                          {comment.image
+                            ? <img src={comment.image} alt={comment.displayName} />
+                            : getInitials(comment.displayName)
+                          }
+                        </div>
+                        <div className="comment-body">
+                          <div className="comment-meta">
+                            <span className="comment-author">{comment.displayName}</span>
+                            {comment.originServer && (
+                              <span className="comment-server"> • {comment.originServer}</span>
+                            )}
+                            <span className="comment-time"> • {formatTime(comment.createdAt)}</span>
+                          </div>
+                          <div className="comment-content">{comment.content}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="no-comments">No comments yet. Be the first!</div>
+                )}
+
+                {/* New comment input */}
+                <div className="comment-input-row">
+                  <div className="comment-input-avatar">
+                    {getInitials(currentUser?.displayName)}
+                  </div>
+                  <div className="comment-input-wrapper">
+                    <textarea
+                      className="comment-input"
+                      placeholder="Write a comment…"
+                      value={commentInputs[post._id] || ''}
+                      onChange={(e) => handleCommentInput(post._id, e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, post)}
+                      rows={1}
+                      disabled={commentLoading[post._id]}
+                    />
                     <button
-                      className="dropdown-item delete-item"
-                      onClick={() => handleDelete(post._id)}
+                      className="comment-submit"
+                      onClick={() => handleSubmitComment(post)}
+                      disabled={!commentInputs[post._id]?.trim() || commentLoading[post._id]}
+                      title="Post comment (Enter)"
                     >
-                      <FiTrash2 /> Delete Post
+                      {commentLoading[post._id]
+                        ? <span className="comment-spinner" />
+                        : <FiSend />
+                      }
                     </button>
-                  )}
-                  {!isOwnPost(post) && (
-                    <div className="dropdown-item disabled">No actions available</div>
-                  )}
+                  </div>
                 </div>
-              )}
-            </div>
+
+              </div>
+            )}
           </div>
-
-          <div className="post-content">{post.description || post.content}</div>
-
-          {post.image && (
-            <div className="post-images">
-              <img src={post.image} alt="" />
-            </div>
-          )}
-
-          <div className="post-footer">
-            <button
-              className="post-action"
-              onClick={() => onLike(post._id)}
-            >
-              <FiThumbsUp className="action-icon" />
-              <span>Like</span>
-              {(post.likeCount > 0 || post.likes > 0) && (
-                <span className="count">{post.likeCount || post.likes}</span>
-              )}
-            </button>
-            <button className="post-action">
-              <FiMessageCircle className="action-icon" />
-              <span>Comment</span>
-              {((post.comments && post.comments.length > 0) || (typeof post.comments === 'number' && post.comments > 0)) && (
-                <span className="count">
-                  {Array.isArray(post.comments) ? post.comments.length : post.comments}
-                </span>
-              )}
-            </button>
-            <button className="post-action">
-              <FiShare2 className="action-icon" />
-              <span>Share</span>
-              {post.shares > 0 && <span className="count">{post.shares}</span>}
-            </button>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };
