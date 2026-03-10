@@ -99,3 +99,21 @@ export const getUserProfileService = async (federatedId) => {
   if (!user) throw createError(404, "User not found");
   return user;
 };
+
+/**
+ * Shared service for searching users using regex.
+ * Used by userController (local search) and federationFeedController (remote search).
+ */
+export const searchUsersService = async (query) => {
+  // Extract all users with regex and limit it to 5
+  return await User.find(
+    {
+      $or: [
+        { displayName: { $regex: query, $options: "i" } },
+        { federatedId: { $regex: query, $options: "i" } }
+      ]
+    },
+    { displayName: 1, avatarUrl: 1, federatedId: 1, followersCount: 1, followingCount: 1 }
+  ).limit(5);
+};
+

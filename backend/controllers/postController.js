@@ -482,7 +482,7 @@ export const getTimeline = async (req, res, next) => {
             timeout: 4000
           }
         );
-        return data.posts || [];
+        return (data.posts || []).map(p => ({ ...p, isRemote: true }));
       } catch {
         return []; // If remote server is offline, skip gracefully
       }

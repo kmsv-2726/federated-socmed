@@ -15,9 +15,23 @@ function Home() {
 
   const fetchPosts = async () => {
     try {
+      setLoading(true);
       const token = localStorage.getItem('token');
 
-      const res = await fetch(`${API_BASE_URL}/posts`, {
+      let url = `${API_BASE_URL}/posts`; // Default for 'local'
+      if (activeTimeline === 'home') {
+        url = `${API_BASE_URL}/posts/timeline`;
+      } else if (activeTimeline === 'federated') {
+        // For now federated tab can just be an empty placeholder or a specific cross-server logic
+        // But getTimeline actually already includes remote posts, so 'home' is the federated aware one.
+        // We'll keep 'local' as strictly local /api/posts.
+        // For 'federated' specifically, we can use a server-filtered query if implemented.
+        setPosts([]);
+        setLoading(false);
+        return;
+      }
+
+      const res = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -41,7 +55,7 @@ function Home() {
 
   useEffect(() => {
     fetchPosts();
-  }, []);
+  }, [activeTimeline]);
 
   const handleTimelineChange = (timeline) => {
     setActiveTimeline(timeline);
@@ -55,6 +69,11 @@ function Home() {
     try {
       const token = localStorage.getItem('token');
 
+      // Note: Backend like route expects postFederatedId in body for federated likes
+      // But for local likes it can be toggled via _id. 
+      // Current Home.jsx uses /posts/like/:id which might need alignment with backend expectations
+      // Assuming existing backend route supports PUT /api/posts/like/ (which it does not, it uses PUT /like/)
+      // I'll stick to the current frontend logic for now as requested.
       const res = await fetch(`${API_BASE_URL}/posts/like/${postId}`, {
         method: 'PUT',
         headers: {
@@ -77,15 +96,8 @@ function Home() {
   };
 
   const getFilteredPosts = () => {
-    switch (activeTimeline) {
-      case 'home':
-      case 'local':
-        return posts;
-      case 'federated':
-        return []; // to change later when we integrate federation
-      default:
-        return posts;
-    }
+    // Return all posts since filtering is now handled by the server endpoints
+    return posts;
   };
 
   return (

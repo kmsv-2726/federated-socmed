@@ -9,7 +9,7 @@ import {
 import { sendFederationEvent } from "../services/federationService.js";
 import TrustedServer from "../models/TrustedServer.js";
 import axios from "axios";
-import { getUserProfileService } from "../services/userService.js";
+import { getUserProfileService, searchUsersService } from "../services/userService.js";
 /**
  * Parses a federatedId and determines if the target lives on this server.
  * Returns { targetOriginServer, isRemote } or throws a 400 error.
@@ -26,15 +26,64 @@ const resolveFollowTarget = (targetFederatedId, next) => {
 
 export const getAllProfiles = async (req, res, next) => {
   try {
-    const users = await User.find(
-      {},
-      { displayName: 1, avatarUrl: 1, federatedId: 1, followersCount: 1, followingCount: 1 }
-    );
+    const search = req.query.search || req.query.name || "";
 
-    res.status(200).json({
-      success: true,
-      users
-    });
+    if (!search) {
+      const users = await User.find(
+        {},
+        { displayName: 1, avatarUrl: 1, federatedId: 1, followersCount: 1, followingCount: 1 }
+      ).limit(5);
+
+      return res.status(200).json({
+        success: true,
+        users
+      });
+    }
+
+    if (search.includes("@")) {
+      const parts = search.split("@");
+      const targetServer = parts[1];
+
+      if (targetServer === process.env.SERVER_NAME) {
+        // Local server search by federatedId
+        const users = await User.find(
+          { federatedId: search },
+          { displayName: 1, avatarUrl: 1, federatedId: 1, followersCount: 1, followingCount: 1 }
+        ).limit(5);
+
+        return res.status(200).json({
+          success: true,
+          users
+        });
+      } else {
+        // Remote server search
+        const trusted = await TrustedServer.findOne({ serverName: targetServer, isActive: true });
+        if (!trusted) {
+          return next(createError(403, `Server ${targetServer} is not trusted or offline`));
+        }
+
+        try {
+          const { data } = await axios.get(
+            `${trusted.serverUrl}/api/federation/feed?type=SEARCH_USERS&query=${encodeURIComponent(search)}`,
+            {
+              headers: { "x-origin-server": process.env.SERVER_NAME },
+              timeout: 5000
+            }
+          );
+          return res.status(200).json(data);
+        } catch (error) {
+          return next(createError(502, "Failed to fetch remote users profile"));
+        }
+      }
+    } else {
+      // Regex local search when no '@' is present
+      const users = await searchUsersService(search);
+      return res.status(200).json({
+        success: true,
+        users
+      });
+    }
+
   } catch (err) {
     next(err);
   }
