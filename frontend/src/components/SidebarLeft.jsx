@@ -8,7 +8,8 @@ import {
   FiServer,
   FiLogOut,
   FiShield,
-  FiHelpCircle
+  FiHelpCircle,
+  FiSearch
 } from 'react-icons/fi';
 
 const SidebarLeft = () => {
@@ -52,6 +53,12 @@ const SidebarLeft = () => {
           onClick={() => handleNavClick('/')}
         >
           <FiHome className="icon" /> Home
+        </button>
+        <button
+          className={`nav-item ${isActive('/search') ? 'active' : ''}`}
+          onClick={() => handleNavClick('/search')}
+        >
+          <FiSearch className="icon" /> Search
         </button>
         <button
           className={`nav-item ${isActive('/profile') ? 'active' : ''}`}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import TimelineTabs from '../components/TimelineTabs';
 import PostCreator from '../components/PostCreator';
 import PostList from '../components/PostList';
+import SearchUsers from '../components/SearchUsers';
 import Layout from '../components/Layout';
 import '../styles/Home.css';
 
@@ -123,9 +124,7 @@ function Home() {
 
   return (
     <Layout>
-      <div className="search-bar">
-        <input type="text" placeholder="Type in search" />
-      </div>
+      <SearchUsers />
 
       <TimelineTabs
         activeTimeline={activeTimeline}
