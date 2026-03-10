@@ -10,7 +10,7 @@ import {
 import { sendFederationEvent } from "../services/federationService.js";
 import TrustedServer from "../models/TrustedServer.js";
 import axios from "axios";
-import { getUserProfileService, searchUsersService } from "../services/userService.js";
+import { getUserProfileService, searchUsersService, enrichWithFollowStatus } from "../services/userService.js";
 /**
  * Parses a federatedId and determines if the target lives on this server.
  * Returns { targetOriginServer, isRemote } or throws a 400 error.
@@ -28,16 +28,22 @@ const resolveFollowTarget = (targetFederatedId, next) => {
 export const getAllProfiles = async (req, res, next) => {
   try {
     const search = req.query.search || req.query.name || "";
+    const limit = parseInt(req.query.limit) || 5;
 
     if (!search) {
       const users = await User.find(
         {},
         { displayName: 1, avatarUrl: 1, federatedId: 1, followersCount: 1, followingCount: 1 }
-      ).limit(5);
+      ).limit(limit);
+
+      const enrichedUsers = await enrichWithFollowStatus(users, req.user?.federatedId);
 
       return res.status(200).json({
         success: true,
-        users
+        users: enrichedUsers,
+        searchType: "local",
+        count: enrichedUsers.length,
+        query: ""
       });
     }
 
@@ -50,11 +56,16 @@ export const getAllProfiles = async (req, res, next) => {
         const users = await User.find(
           { federatedId: search },
           { displayName: 1, avatarUrl: 1, federatedId: 1, followersCount: 1, followingCount: 1 }
-        ).limit(5);
+        ).limit(limit);
+
+        const enrichedUsers = await enrichWithFollowStatus(users, req.user?.federatedId);
 
         return res.status(200).json({
           success: true,
-          users
+          users: enrichedUsers,
+          searchType: "local",
+          count: enrichedUsers.length,
+          query: search
         });
       } else {
         // Remote server search
@@ -71,17 +82,28 @@ export const getAllProfiles = async (req, res, next) => {
               timeout: 5000
             }
           );
-          return res.status(200).json(data);
+          // Ensure metadata is present even from remote responses
+          const enrichedUsers = await enrichWithFollowStatus(data.users || [], req.user?.federatedId);
+          return res.status(200).json({
+            ...data,
+            users: enrichedUsers,
+            searchType: data.searchType || "federated",
+            query: data.query || search
+          });
         } catch (error) {
           return next(createError(502, "Failed to fetch remote users profile"));
         }
       }
     } else {
       // Regex local search when no '@' is present
-      const users = await searchUsersService(search);
+      const users = await searchUsersService(search, limit);
+      const enrichedUsers = await enrichWithFollowStatus(users, req.user?.federatedId);
       return res.status(200).json({
         success: true,
-        users
+        users: enrichedUsers,
+        searchType: "local",
+        count: enrichedUsers.length,
+        query: search
       });
     }
 
@@ -432,8 +454,10 @@ export const searchUsers = async (req, res, next) => {
 
     let users = await User.find(
       { displayName: { $regex: new RegExp(parsedQuery, 'i') } },
-      { displayName: 1, avatarUrl: 1, serverName: 1 }
+      { displayName: 1, avatarUrl: 1, federatedId: 1, serverName: 1 }
     ).limit(10);
+
+    users = await enrichWithFollowStatus(users, req.user?.federatedId);
 
     // Map to the shape expected by DirectMessage.jsx
     users = users.map(u => ({

@@ -100,13 +100,13 @@ const DirectMessage = ({ onClose, initialTargetUser = null }) => {
 
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get(`${API_BASE_URL}/user/search?q=${query}`, {
+            const res = await axios.get(`${API_BASE_URL}/user?search=${query}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (res.data.success) {
                 // Filter out current user from search
                 const currentUserId = currentUser?._id || currentUser?.id;
-                setSearchResults(res.data.users.filter(u => u._id !== currentUserId));
+                setSearchResults(res.data.users.filter(u => (u._id || u.id) !== currentUserId));
             }
         } catch (err) {
             console.error('Error searching users:', err);

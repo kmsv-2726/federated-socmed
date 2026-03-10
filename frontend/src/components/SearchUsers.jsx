@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FiSearch, FiX, FiUserCheck, FiUserPlus, FiGlobe, FiHome as FiLocal, FiAlertCircle, FiFlag } from 'react-icons/fi';
 import '../styles/SearchUsers.css';
 
@@ -13,6 +14,7 @@ const SearchUsers = () => {
     const [hasSearched, setHasSearched] = useState(false);
     const debounceRef = useRef(null);
     const inputRef = useRef(null);
+    const navigate = useNavigate();
 
     // Reporting state
     const [reportingUser, setReportingUser] = useState(null);
@@ -44,7 +46,7 @@ const SearchUsers = () => {
         try {
             const token = localStorage.getItem('token');
             const res = await fetch(
-                `${API_BASE_URL}/search/users?q=${encodeURIComponent(searchQuery.trim())}&limit=20`,
+                `${API_BASE_URL}/user?search=${encodeURIComponent(searchQuery.trim())}&limit=20`,
                 {
                     method: 'GET',
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -56,9 +58,9 @@ const SearchUsers = () => {
             if (data.success) {
                 setResults(data.users || []);
                 setSearchMeta({
-                    searchType: data.searchType,
-                    count: data.count,
-                    query: data.query
+                    searchType: data.searchType || (searchQuery.includes('@') ? 'federated' : 'local'),
+                    count: data.count || (data.users ? data.users.length : 0),
+                    query: data.query || searchQuery
                 });
             } else {
                 setError(data.message || 'Search failed');
@@ -107,7 +109,7 @@ const SearchUsers = () => {
             const method = user.is_following ? 'DELETE' : 'POST';
 
             const res = await fetch(
-                `${API_BASE_URL}/user/${user.federatedId}/follow`,
+                `${API_BASE_URL}/user/${encodeURIComponent(user.federatedId)}/follow`,
                 {
                     method,
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -196,6 +198,26 @@ const SearchUsers = () => {
         }
     };
 
+    const handleCardClick = (federatedId) => {
+        navigate(`/user/${encodeURIComponent(federatedId)}`);
+    };
+
+    const SkeletonCard = () => (
+        <div className="search-result-card skeleton">
+            <div className="search-result-left">
+                <div className="search-result-avatar skeleton-bg"></div>
+                <div className="search-result-info">
+                    <div className="skeleton-line skeleton-title"></div>
+                    <div className="skeleton-line skeleton-subtitle"></div>
+                    <div className="skeleton-line skeleton-text"></div>
+                </div>
+            </div>
+            <div className="search-result-actions">
+                <div className="skeleton-button"></div>
+            </div>
+        </div>
+    );
+
     return (
         <div className="search-users-container" id="search-users">
             {/* Search Input */}
@@ -238,30 +260,29 @@ const SearchUsers = () => {
                 </div>
             )}
 
-            {/* Loading */}
-            {loading && (
-                <div className="search-loading">
-                    <div className="search-spinner"></div>
-                    <span>Searching...</span>
+            {/* Loading / Empty Skeleton State */}
+            {(loading || (hasSearched && results.length === 0)) && (
+                <div className="search-results-skeleton">
+                    {[1].map(i => <SkeletonCard key={i} />)}
+                    {loading && (
+                        <div className="search-loading-text">
+                            <div className="search-spinner"></div>
+                            <span>Fetching more results...</span>
+                        </div>
+                    )}
                 </div>
             )}
 
-            {/* Error */}
-            {error && (
-                <div className="search-error">
-                    <FiAlertCircle />
-                    <span>{error}</span>
-                </div>
-            )}
 
-            {/* Results */}
-            {!loading && !error && results.length > 0 && (
+            {/* Results (Show if we have them, regardless of errors from other servers) */}
+            {!loading && results.length > 0 && (
                 <div className="search-results" id="search-results-list">
                     {results.map((user, index) => (
                         <div
                             key={user.federatedId || index}
                             className={`search-result-card ${user.is_following ? 'following' : ''}`}
                             id={`search-result-${index}`}
+                            onClick={() => handleCardClick(user.federatedId)}
                         >
                             <div className="search-result-left">
                                 <div className="search-result-avatar">
@@ -295,7 +316,10 @@ const SearchUsers = () => {
                             <div className="search-result-actions">
                                 <button
                                     className={`search-follow-btn ${user.is_following ? 'following' : ''}`}
-                                    onClick={() => handleFollowToggle(user)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleFollowToggle(user);
+                                    }}
                                     id={`follow-btn-${index}`}
                                 >
                                     {user.is_following ? (
@@ -312,7 +336,10 @@ const SearchUsers = () => {
                                 </button>
                                 <button
                                     className="search-report-btn"
-                                    onClick={() => setReportingUser(user)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setReportingUser(user);
+                                    }}
                                     title="Report Profile"
                                 >
                                     <FiFlag size={14} />
@@ -393,16 +420,10 @@ const SearchUsers = () => {
             )}
 
 
-            {/* Empty state */}
+            {/* Final Empty Message (only if truly nothing after loading finishes) */}
             {!loading && !error && hasSearched && results.length === 0 && (
-                <div className="search-empty">
-                    <FiSearch size={40} />
-                    <p>No users found for "<strong>{query}</strong>"</p>
-                    {!query.includes('@') && (
-                        <p className="search-empty-hint">
-                            Try searching with <code>{query}@servername</code> to find users on a remote server
-                        </p>
-                    )}
+                <div className="search-empty-fade">
+                    <p>No more results found for "<strong>{query}</strong>"</p>
                 </div>
             )}
 
