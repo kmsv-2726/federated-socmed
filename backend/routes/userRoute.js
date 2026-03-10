@@ -17,8 +17,6 @@ router.post("/:federatedId/follow", verifyToken, followUser);
 router.delete("/:federatedId/follow", verifyToken, unfollowUser);
 router.get("/:federatedId/follow/status", verifyToken, checkFollowStatus);
 
-router.get("/:federatedId/followers", verifyToken, getProfileFollowers);
-router.get("/:federatedId/following", verifyToken, getProfileFollowing);
 
 router.get("/:federatedId", verifyToken, getUserProfile);
 
