@@ -302,7 +302,15 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
             {/* ── Content ── */}
             <div className="post-content">{post.description || post.content}</div>
 
-            {post.image && (
+            {post.images && post.images.length > 0 ? (
+              <div className="image-preview-grid">
+                {post.images.map((img, idx) => (
+                  <div key={idx} className="image-preview-item">
+                    <img src={img} alt={`Post attachment ${idx + 1}`} className="preview-image" />
+                  </div>
+                ))}
+              </div>
+            ) : post.image && (
               <div className="post-images">
                 <img src={post.image} alt="" />
               </div>
