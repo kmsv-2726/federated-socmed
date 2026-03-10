@@ -611,9 +611,17 @@ body {
   .container {
     grid-template-columns: 1fr;
   }
+}
 
-  .left-sidebar,
-  .right-sidebar {}
+/* ── Like button active state ── */
+.post-action.liked {
+  color: #6366f1;
+  font-weight: 600;
+}
+
+.post-action.liked .action-icon {
+  fill: #6366f1;
+  stroke: #6366f1;
 }
 
 /* ── Comments Section ── */

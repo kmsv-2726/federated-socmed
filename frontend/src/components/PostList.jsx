@@ -10,6 +10,7 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
   const [commentInputs, setCommentInputs] = useState({});   // { postId: string }
   const [commentLoading, setCommentLoading] = useState({}); // { postId: bool }
   const [localComments, setLocalComments] = useState({});   // { postId: [comment, ...] }
+  const [localLikes, setLocalLikes] = useState({});         // { postId: { count, liked, loading } }
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -31,6 +32,24 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
       posts.forEach(post => {
         if (!next[post._id]) {
           next[post._id] = Array.isArray(post.comments) ? post.comments : [];
+        }
+      });
+      return next;
+    });
+    setLocalLikes(prev => {
+      const next = { ...prev };
+      posts.forEach(post => {
+        if (!next[post._id]) {
+          const currentFederatedId = (() => {
+            try { return JSON.parse(localStorage.getItem('user'))?.federatedId; } catch { return null; }
+          })();
+          next[post._id] = {
+            count: post.likeCount || post.likes || 0,
+            liked: Array.isArray(post.likedBy) && currentFederatedId
+              ? post.likedBy.includes(currentFederatedId)
+              : false,
+            loading: false
+          };
         }
       });
       return next;
@@ -115,6 +134,60 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
     }
   };
 
+  const handleLike = async (post) => {
+    if (localLikes[post._id]?.loading) return;
+
+    const current = localLikes[post._id] || { count: 0, liked: false };
+    const optimisticLiked = !current.liked;
+    const optimisticCount = optimisticLiked ? current.count + 1 : Math.max(0, current.count - 1);
+
+    // Optimistic update
+    setLocalLikes(prev => ({
+      ...prev,
+      [post._id]: { count: optimisticCount, liked: optimisticLiked, loading: true }
+    }));
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/posts/like/`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ postFederatedId: post.federatedId })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setLocalLikes(prev => ({
+          ...prev,
+          [post._id]: {
+            count: data.likeCount ?? optimisticCount,
+            liked: data.liked ?? optimisticLiked,
+            loading: false
+          }
+        }));
+        // Notify parent if provided
+        if (onLike) onLike(post._id);
+      } else {
+        // Revert on failure
+        setLocalLikes(prev => ({
+          ...prev,
+          [post._id]: { ...current, loading: false }
+        }));
+      }
+    } catch (err) {
+      console.error('Error liking post:', err);
+      // Revert on error
+      setLocalLikes(prev => ({
+        ...prev,
+        [post._id]: { ...current, loading: false }
+      }));
+    }
+  };
+
   const handleDelete = async (postId) => {
     if (!window.confirm('Are you sure you want to delete this post?')) return;
 
@@ -179,6 +252,7 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
         const comments = localComments[post._id] || [];
         const commentCount = comments.length;
         const isCommentsOpen = openCommentsId === post._id;
+        const likeData = localLikes[post._id] || { count: post.likeCount || 0, liked: false, loading: false };
 
         return (
           <div key={post._id} className="post">
@@ -236,11 +310,15 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
 
             {/* ── Footer ── */}
             <div className="post-footer">
-              <button className="post-action" onClick={() => onLike(post._id)}>
+              <button
+                className={`post-action${likeData.liked ? ' liked' : ''}`}
+                onClick={() => handleLike(post)}
+                disabled={likeData.loading}
+              >
                 <FiThumbsUp className="action-icon" />
-                <span>Like</span>
-                {(post.likeCount > 0 || post.likes > 0) && (
-                  <span className="count">{post.likeCount || post.likes}</span>
+                <span>{likeData.liked ? 'Liked' : 'Like'}</span>
+                {likeData.count > 0 && (
+                  <span className="count">{likeData.count}</span>
                 )}
               </button>
 
