@@ -487,6 +487,22 @@ body {
   background: none;
 }
 
+/* ── Repost Header ── */
+.repost-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 10px;
+  font-weight: 500;
+  padding-left: 2px;
+}
+
+.repost-icon {
+  font-size: 14px;
+}
+
 .post-content {
   font-size: 14px;
   line-height: 1.6;
@@ -856,6 +872,10 @@ body {
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
   display: inline-block;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
 }
 
 @keyframes spin {

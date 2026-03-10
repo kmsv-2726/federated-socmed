@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiThumbsUp, FiMessageCircle, FiShare2, FiMoreHorizontal, FiTrash2, FiSend, FiChevronUp, FiChevronDown } from 'react-icons/fi';
+import { FiThumbsUp, FiMessageCircle, FiRepeat, FiMoreHorizontal, FiTrash2, FiSend, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 
 const API_BASE_URL = "http://localhost:5000/api";
 
-const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
+const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onRepostSuccess }) => {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [openCommentsId, setOpenCommentsId] = useState(null);
@@ -11,6 +11,7 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
   const [commentLoading, setCommentLoading] = useState({}); // { postId: bool }
   const [localComments, setLocalComments] = useState({});   // { postId: [comment, ...] }
   const [localLikes, setLocalLikes] = useState({});         // { postId: { count, liked, loading } }
+  const [repostLoading, setRepostLoading] = useState({});   // { postId: bool }
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -188,6 +189,40 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
     }
   };
 
+  const handleRepost = async (post) => {
+    if (repostLoading[post._id]) return;
+
+    setRepostLoading(prev => ({ ...prev, [post._id]: true }));
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/posts/repost`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ postFederatedId: post.federatedId })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert('Post reposted successfully!');
+        if (onRepostSuccess) {
+          onRepostSuccess(data.post);
+        }
+      } else {
+        alert(data.message || 'Failed to repost');
+      }
+    } catch (err) {
+      console.error('Error reposting:', err);
+      alert('Failed to repost. Please try again.');
+    } finally {
+      setRepostLoading(prev => ({ ...prev, [post._id]: false }));
+    }
+  };
+
   const handleDelete = async (postId) => {
     if (!window.confirm('Are you sure you want to delete this post?')) return;
 
@@ -253,9 +288,18 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
         const commentCount = comments.length;
         const isCommentsOpen = openCommentsId === post._id;
         const likeData = localLikes[post._id] || { count: post.likeCount || 0, liked: false, loading: false };
+        const isReposting = repostLoading[post._id];
 
         return (
           <div key={post._id} className="post">
+            {/* ── Repost Header ── */}
+            {post.isRepost && (
+              <div className="repost-header">
+                <FiRepeat className="repost-icon" />
+                <span>{post.userDisplayName || 'Someone'} reposted</span>
+              </div>
+            )}
+
             {/* ── Header ── */}
             <div className="post-header">
               <div className="post-author">
@@ -340,10 +384,13 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
                 }
               </button>
 
-              <button className="post-action">
-                <FiShare2 className="action-icon" />
-                <span>Share</span>
-                {post.shares > 0 && <span className="count">{post.shares}</span>}
+              <button
+                className="post-action"
+                onClick={() => handleRepost(post)}
+                disabled={isReposting}
+              >
+                <FiRepeat className={`action-icon ${isReposting ? 'animate-spin' : ''}`} />
+                <span>{isReposting ? 'Reposting...' : 'Repost'}</span>
               </button>
             </div>
 

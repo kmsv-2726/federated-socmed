@@ -257,6 +257,7 @@ function UserProfile() {
                                 onLike={handleLikePost}
                                 activeTimeline="profile"
                                 onDeletePost={(postId) => setPosts(posts.filter(p => p._id !== postId))}
+                                onRepostSuccess={(newPost) => setPosts([newPost, ...posts])}
                             />
                         )}
                     </div>

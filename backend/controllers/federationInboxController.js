@@ -4,7 +4,7 @@ import crypto from "crypto";
 
 import { followUserService, unfollowUserService } from "../services/userService.js";
 import { followChannelService, unFollowChannelService } from "../services/channelService.js";
-import { toggleLikePostService, addCommentService } from "../services/postService.js";
+import { toggleLikePostService, addCommentService, createPostService, deletePostService } from "../services/postService.js";
 import { createReportService } from "../services/reportService.js";
 
 import User from "../models/User.js";
@@ -49,7 +49,8 @@ export const federationInbox = async (req, res, next) => {
           payload.actor.federatedId,
           payload.object.federatedId,
           payload.actor.server,
-          process.env.SERVER_NAME
+          process.env.SERVER_NAME,
+          true // isRemote: true
         );
         break;
       }
@@ -66,7 +67,7 @@ export const federationInbox = async (req, res, next) => {
         const channel = await Channel.findOne({ federatedId: payload.object.federatedId });
         if (!channel) throw createError(404, "Channel not found");
 
-        await followChannelService(payload.actor.federatedId, channel);
+        await followChannelService(payload.actor.federatedId, channel, true); // isRemote: true
         break;
       }
 
@@ -97,6 +98,36 @@ export const federationInbox = async (req, res, next) => {
           commentFederatedId: `${payload.actor.federatedId}/comment/${crypto.randomUUID()}`,
           originServer: payload.actor.server
         });
+        break;
+      }
+
+      case "CREATE_POST": {
+        await createPostService({
+          description: payload.data.description,
+          image: payload.data.image || null,
+          images: payload.data.images || [],
+          isUserPost: payload.data.isUserPost || false,
+          userDisplayName: payload.data.userDisplayName,
+          authorFederatedId: payload.actor.federatedId,
+          isChannelPost: payload.data.isChannelPost || false,
+          channelName: payload.data.channelName || null,
+          federatedId: payload.object.federatedId,
+          originServer: payload.actor.server,
+          isRemote: true,
+          isRepost: payload.data.isRepost || false,
+          originalPostFederatedId: payload.data.originalPostFederatedId || null,
+          originalAuthorFederatedId: payload.data.originalAuthorFederatedId || null
+        });
+        break;
+      }
+
+      case "DELETE_POST": {
+        const postToDelete = await Post.findOne({
+          federatedId: payload.object.federatedId
+        });
+        if (postToDelete) {
+          await deletePostService(postToDelete);
+        }
         break;
       }
 

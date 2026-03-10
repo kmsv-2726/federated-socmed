@@ -246,8 +246,8 @@ const ChannelPage = () => {
           <div className="empty-state channel-restricted-msg">
             <FiAlertCircle size={20} />
             <span>
-              {currentChannel?.visibility === 'read-only' 
-                ? 'This channel is read-only. Only admins can post here.' 
+              {currentChannel?.visibility === 'read-only'
+                ? 'This channel is read-only. Only admins can post here.'
                 : currentChannel?.visibility === 'private' && !isFollowing
                   ? 'Join this community to participate in discussions.'
                   : 'You do not have permission to post in this channel.'}
@@ -270,7 +270,8 @@ const ChannelPage = () => {
           <PostList
             posts={posts}
             onLike={handleLikePost}
-            onDelete={handleDeletePost}
+            onDeletePost={handleDeletePost}
+            onRepostSuccess={(newPost) => setPosts([newPost, ...posts])}
           />
         )}
       </div>
