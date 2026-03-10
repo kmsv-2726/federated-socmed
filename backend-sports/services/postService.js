@@ -15,7 +15,11 @@ export const createPostService = async ({
   isChannelPost,
   channelName,
   federatedId,
-  originServer
+  originServer,
+  isRemote = false,
+  isRepost = false,
+  originalPostFederatedId = null,
+  originalAuthorFederatedId = null
 }) => {
 
   const newPost = new Post({
@@ -26,6 +30,10 @@ export const createPostService = async ({
     userDisplayName: userDisplayName,
     authorFederatedId: authorFederatedId,
 
+    isRepost,
+    originalPostFederatedId: isRepost ? originalPostFederatedId : federatedId,
+    originalAuthorFederatedId: isRepost ? originalAuthorFederatedId : authorFederatedId,
+
     isChannelPost: !!isChannelPost,
     channelName: isChannelPost ? channelName : null,
 
@@ -33,8 +41,8 @@ export const createPostService = async ({
     originServer,
     serverName: originServer,
 
-    isRemote: false,
-    federationStatus: "local",
+    isRemote: !!isRemote,
+    federationStatus: isRemote ? "received" : "local",
     federatedTo: []
   });
 

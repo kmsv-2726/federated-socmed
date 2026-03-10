@@ -23,60 +23,92 @@ export const createPost = async (req, res, next) => {
     }
 
     const isUserPost = !isChannelPost;
+    let postFederatedId;
+    let originServer = req.user.serverName;
+    let isRemote = false;
 
-    let channel = null;
-
-    // Channel validation remains in controller (HTTP validation layer)
     if (isChannelPost) {
       if (!channelName) {
         return next(createError(400, "Channel name is required for channel posts"));
       }
 
-      channel = await Channel.findOne({
-        name: channelName,
-        serverName: req.user.serverName
-      });
+      if (channelName.includes("@")) {
+        const [name, targetServer] = channelName.split("@");
 
-      if (!channel) {
-        return next(createError(404, "Channel not found"));
-      }
+        if (targetServer === req.user.serverName) {
+          // It's actually a local channel despite having @
+          const channel = await Channel.findOne({
+            name: name,
+            serverName: req.user.serverName
+          });
 
-      if (channel.isRemote) {
-        return next(createError(403, "Cannot post directly to a remote channel"));
-      }
+          if (!channel) {
+            return next(createError(404, "Channel not found"));
+          }
 
-      if (channel.visibility === "read-only" && req.user.role !== "admin") {
-        return next(createError(403, "This channel is read-only"));
-      }
+          postFederatedId = `${name}@${req.user.serverName}/post/${Date.now()}`;
+        } else {
+          // REMOTE CHANNEL CASE
+          isRemote = true;
+          originServer = targetServer;
+          postFederatedId = `${name}@${targetServer}/post/${Date.now()}`;
 
-      if (channel.visibility === "private") {
-        return next(createError(403, "This channel is private"));
-      }
+          // 1. Notify the remote server FIRST
+          const response = await sendFederationEvent({
+            type: "CREATE_POST",
+            actorFederatedId: req.user.federatedId,
+            objectFederatedId: postFederatedId,
+            data: {
+              description: description.trim(),
+              image,
+              isChannelPost: true,
+              channelName: name,
+              userDisplayName: req.user.displayName,
+              isRepost: req.body.isRepost || false,
+              originalPostFederatedId: req.body.originalPostFederatedId || null,
+              originalAuthorFederatedId: req.body.originalAuthorFederatedId || null
+            }
+          });
 
-      // Check against channel's custom banned words list
-      if (channel.bannedWords && channel.bannedWords.length > 0) {
-        const lowercaseDesc = description.toLowerCase();
-        const containsBannedWord = channel.bannedWords.some(word => lowercaseDesc.includes(word.toLowerCase()));
+          if (response && (response.queued || response.skipped)) {
+            return next(createError(502, "Remote server is offline or unreachable. Post failed."));
+          }
 
-        if (containsBannedWord) {
-          return next(createError(400, `Your post contains terminology banned by the '${channelName}' channel.`));
+          // 2. Write local record ONLY if federation succeeded
+          const savedPost = await createPostService({
+            description: description.trim(),
+            image,
+            isUserPost: false,
+            userDisplayName: req.user.displayName,
+            authorFederatedId: req.user.federatedId,
+            isChannelPost: true,
+            channelName: name,
+            federatedId: postFederatedId,
+            originServer,
+            isRemote: true
+          });
+
+          return res.status(201).json({ success: true, post: savedPost });
         }
-      }
-    } else { // If it's a user post, description is still required
-      if (!description || description.trim() === "") {
-        return next(createError(400, "Post description is required"));
-      }
-    }
+      } else {
+        // LOCAL CHANNEL CASE
+        const channel = await Channel.findOne({
+          name: channelName,
+          serverName: req.user.serverName
+        });
 
-    // Federated ID generation stays here (request context logic)
-    let postFederatedId;
-    if (isChannelPost) {
-      postFederatedId = `${channelName}@${req.user.serverName}/post/${Date.now()}`;
+        if (!channel) {
+          return next(createError(404, "Channel not found"));
+        }
+
+        postFederatedId = `${channelName}@${req.user.serverName}/post/${Date.now()}`;
+      }
     } else {
+      // USER POST CASE
       postFederatedId = `${req.user.federatedId}/post/${Date.now()}`;
     }
 
-    // Delegate DB creation to service layer
+    // Local Case: User Post or Local Channel Post
     const savedPost = await createPostService({
       description: description.trim(),
       image,
@@ -86,14 +118,11 @@ export const createPost = async (req, res, next) => {
       isChannelPost,
       channelName,
       federatedId: postFederatedId,
-      originServer: req.user.serverName
+      originServer,
+      isRemote: false
     });
 
-    res.status(201).json({
-      success: true,
-      post: savedPost
-    });
-
+    res.status(201).json({ success: true, post: savedPost });
   } catch (err) {
     next(err);
   }
@@ -110,9 +139,30 @@ export const deletePost = async (req, res, next) => {
     }
 
     if (post.isRemote) {
-      return next(createError(403, "Cannot modify remote content"));
+      // 1. Notify the remote server FIRST
+      const response = await sendFederationEvent({
+        type: "DELETE_POST",
+        actorFederatedId: req.user.federatedId,
+        objectFederatedId: post.federatedId,
+        data: {
+          postId: post._id
+        }
+      });
+
+      if (response && (response.queued || response.skipped)) {
+        return next(createError(502, "Remote server is offline or unreachable. Delete failed."));
+      }
+
+      // 2. Delete local copy ONLY if federation succeeded
+      await deletePostService(post);
+
+      return res.status(200).json({
+        success: true,
+        message: "Remote post deleted successfully"
+      });
     }
 
+    // LOCAL POST CASE
     // Use federatedId (stable) instead of displayName (mutable) for ownership check
     if (
       post.authorFederatedId !== req.user.federatedId &&
@@ -259,6 +309,94 @@ export const createComment = async (req, res, next) => {
 };
 
 
+export const repostPost = async (req, res, next) => {
+  try {
+    const { postFederatedId } = req.body;
+
+    if (!postFederatedId) {
+      return next(createError(400, "Original post federated ID is required"));
+    }
+
+    let originalPost = await Post.findOne({ federatedId: postFederatedId });
+
+    // If not found locally, fetch from remote
+    if (!originalPost) {
+      const parts = postFederatedId.split("/post/");
+      if (parts.length !== 2) {
+        return next(createError(400, "Invalid post federated ID"));
+      }
+
+      const serverPart = parts[0];
+      const originServer = serverPart.includes("@") ? serverPart.split("@")[1] : serverPart;
+
+      const trusted = await TrustedServer.findOne({ serverName: originServer, isActive: true });
+      if (!trusted) {
+        return next(createError(403, `Origin server ${originServer} is not trusted or offline`));
+      }
+
+      try {
+        const { data } = await axios.get(
+          `${trusted.serverUrl}/api/federation/feed?type=GET_POSTS&federatedId=${postFederatedId}`,
+          {
+            headers: { "x-origin-server": process.env.SERVER_NAME },
+            timeout: 5000
+          }
+        );
+
+        if (data.posts && data.posts.length > 0) {
+          originalPost = data.posts[0];
+        } else {
+          return next(createError(404, "Original post not found on remote server"));
+        }
+      } catch (error) {
+        return next(createError(502, "Failed to fetch original post from remote server"));
+      }
+    }
+
+    // Resolve true original post if the post being reposted is itself a repost
+    const trueOriginalPostId = originalPost.isRepost ? originalPost.originalPostFederatedId : originalPost.federatedId;
+    const originalAuthorFederatedId = originalPost.isRepost ? originalPost.originalAuthorFederatedId : originalPost.authorFederatedId;
+
+    // Prevent double reposting of the SAME root post
+    const existingRepost = await Post.findOne({
+      authorFederatedId: req.user.federatedId,
+      isRepost: true,
+      originalPostFederatedId: trueOriginalPostId
+    });
+
+    if (existingRepost) {
+      return next(createError(400, "You have already reposted this post"));
+    }
+
+    const newPostFederatedId = `${req.user.federatedId}/post/${Date.now()}`;
+
+    // Create the repost locally
+    const savedRepost = await createPostService({
+      description: originalPost.description,
+      image: originalPost.image,
+      isUserPost: true,
+      userDisplayName: req.user.displayName,
+      authorFederatedId: req.user.federatedId,
+      isChannelPost: false,
+      channelName: null,
+      federatedId: newPostFederatedId,
+      originServer: req.user.serverName,
+      isRemote: false,
+      isRepost: true,
+      originalPostFederatedId: trueOriginalPostId,
+      originalAuthorFederatedId
+    });
+
+    res.status(201).json({
+      success: true,
+      post: savedRepost
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
 
 
 /**
@@ -381,10 +519,23 @@ export const getTimeline = async (req, res, next) => {
       [combined[i], combined[j]] = [combined[j], combined[i]];
     }
 
+    // ── 7. Deduplicate Reposts ───────────────────────────────────────────────
+    // If multiple followed users repost the same original content, only show it once.
+    const seenRootIds = new Set();
+    const deduplicatedFeed = [];
+
+    for (const post of combined) {
+      const rootId = post.isRepost ? post.originalPostFederatedId : post.federatedId;
+      if (!seenRootIds.has(rootId)) {
+        seenRootIds.add(rootId);
+        deduplicatedFeed.push(post);
+      }
+    }
+
     return res.status(200).json({
       success: true,
-      total: combined.length,
-      posts: combined
+      total: deduplicatedFeed.length,
+      posts: deduplicatedFeed
     });
 
   } catch (err) {

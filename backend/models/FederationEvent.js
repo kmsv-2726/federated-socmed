@@ -16,6 +16,8 @@ const federationEventSchema = new mongoose.Schema(
         "UNFOLLOW_USER",
         "FOLLOW_CHANNEL",
         "UNFOLLOW_CHANNEL",
+        "CREATE_POST",
+        "DELETE_POST",
         "LIKE_POST",
         "COMMENT_POST",
         "REPORT"

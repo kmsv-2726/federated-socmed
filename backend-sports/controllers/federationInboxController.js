@@ -4,7 +4,7 @@ import crypto from "crypto";
 
 import { followUserService, unfollowUserService } from "../services/userService.js";
 import { followChannelService, unFollowChannelService } from "../services/channelService.js";
-import { toggleLikePostService, addCommentService } from "../services/postService.js";
+import { toggleLikePostService, addCommentService, createPostService, deletePostService } from "../services/postService.js";
 import { createReportService } from "../services/reportService.js";
 
 import User from "../models/User.js";
@@ -97,6 +97,35 @@ export const federationInbox = async (req, res, next) => {
           commentFederatedId: `${payload.actor.federatedId}/comment/${crypto.randomUUID()}`,
           originServer: payload.actor.server
         });
+        break;
+      }
+
+      case "CREATE_POST": {
+        await createPostService({
+          description: payload.data.description,
+          image: payload.data.image,
+          isUserPost: !payload.data.isChannelPost,
+          userDisplayName: payload.data.userDisplayName,
+          authorFederatedId: payload.actor.federatedId,
+          isChannelPost: payload.data.isChannelPost,
+          channelName: payload.data.channelName,
+          federatedId: payload.object.federatedId,
+          originServer: payload.actor.server,
+          isRemote: true,
+          isRepost: payload.data.isRepost || false,
+          originalPostFederatedId: payload.data.originalPostFederatedId || null,
+          originalAuthorFederatedId: payload.data.originalAuthorFederatedId || null
+        });
+        break;
+      }
+
+      case "DELETE_POST": {
+        const postToDelete = await Post.findOne({
+          federatedId: payload.object.federatedId
+        });
+        if (postToDelete) {
+          await deletePostService(postToDelete);
+        }
         break;
       }
 

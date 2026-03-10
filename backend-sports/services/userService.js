@@ -8,7 +8,7 @@ import { createError } from "../utils/error.js";
  * - REST followUser controller
  * - Federation inbox FOLLOW event
  */
-export const followUserService = async (followerFederatedId, followingFederatedId, followerOriginServer, followingOriginServer) => {
+export const followUserService = async (followerFederatedId, followingFederatedId, followerOriginServer, followingOriginServer, isRemote = false) => {
 
   if (followerFederatedId === followingFederatedId) {
     throw createError(400, "You cannot follow yourself");
@@ -28,7 +28,8 @@ export const followUserService = async (followerFederatedId, followingFederatedI
     followingFederatedId,
     serverName: followerOriginServer,
     followerOriginServer,
-    followingOriginServer
+    followingOriginServer,
+    isRemote
   });
 
   await newFollow.save();
