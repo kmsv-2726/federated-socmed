@@ -223,8 +223,12 @@ function UserProfile() {
                                 <p className="username">@{userProfile.displayName}</p>
                                 <p className="bio">{userProfile.federatedId}</p>
                                 <div className="profile-meta">
-                                    <span><FiCalendar /> Joined recently</span>
-                                    <span><FiMapPin /> {userProfile.serverName || 'Unknown server'}</span>
+                                    <span>
+                                        <FiCalendar /> Joined {userProfile.createdAt ? new Date(userProfile.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Unknown'}
+                                    </span>
+                                    <span>
+                                        <FiMapPin /> {userProfile.originServer || userProfile.serverName || 'Unknown server'}
+                                    </span>
                                 </div>
                             </div>
                         </div>

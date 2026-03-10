@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FiThumbsUp, FiMessageCircle, FiRepeat, FiMoreHorizontal, FiTrash2, FiSend, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 
 const API_BASE_URL = "http://localhost:5000/api";
@@ -13,6 +14,7 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onRepostSuccess
   const [localLikes, setLocalLikes] = useState({});         // { postId: { count, liked, loading } }
   const [repostLoading, setRepostLoading] = useState({});   // { postId: bool }
   const menuRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
@@ -255,6 +257,11 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onRepostSuccess
       post.userDisplayName === currentUser.displayName;
   };
 
+  const handleNavigateToProfile = (federatedId) => {
+    if (!federatedId) return;
+    navigate(`/user/${encodeURIComponent(federatedId)}`);
+  };
+
   const formatTime = (date) => {
     const now = new Date();
     const postDate = new Date(date);
@@ -302,7 +309,7 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onRepostSuccess
 
             {/* ── Header ── */}
             <div className="post-header">
-              <div className="post-author">
+              <div className="post-author" onClick={() => handleNavigateToProfile(post.authorFederatedId)} style={{ cursor: 'pointer' }}>
                 <div className="user-avatar">
                   {getInitials(post.userDisplayName || post.author)}
                 </div>
