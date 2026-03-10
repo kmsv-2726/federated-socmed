@@ -27,6 +27,21 @@ const postSchema = new mongoose.Schema(
       default: true
     },
 
+    isRepost: {
+      type: Boolean,
+      default: false
+    },
+
+    originalPostFederatedId: {
+      type: String,
+      default: null
+    },
+
+    originalAuthorFederatedId: {
+      type: String,
+      default: null
+    },
+
     userDisplayName: {
       type: String,
       default: null

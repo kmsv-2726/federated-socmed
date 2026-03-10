@@ -27,6 +27,11 @@ const userFollowSchema = new mongoose.Schema(
     followingOriginServer: {
       type: String,
       required: true
+    },
+
+    isRemote: {
+      type: Boolean,
+      default: false
     }
   },
   { timestamps: true }
