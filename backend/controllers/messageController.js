@@ -6,7 +6,7 @@ import { io, onlineUsers } from '../index.js';
 export const getMessages = async (req, res, next) => {
     try {
         const { targetUserId } = req.params;
-        const currentUserId = req.user.id; // from verifyToken
+        const currentUserId = req.user.userId; // from verifyToken
 
         const messages = await Message.find({
             $or: [
@@ -25,7 +25,7 @@ export const getMessages = async (req, res, next) => {
 export const sendMessage = async (req, res, next) => {
     try {
         const { receiverId, messageText } = req.body;
-        const senderId = req.user.id;
+        const senderId = req.user.userId;
 
         if (!receiverId || !messageText) {
             return res.status(400).json({ success: false, message: 'Receiver and message text are required' });
@@ -54,11 +54,11 @@ export const sendMessage = async (req, res, next) => {
 // Get a list of users the current user has chatted with
 export const getChatHistoryUsers = async (req, res, next) => {
     try {
-        const currentUserId = req.user.id;
+        const currentUserId = req.user.userId;
 
         const messages = await Message.find({
             $or: [{ sender: currentUserId }, { receiver: currentUserId }]
-        }).populate('sender receiver', 'username profilePicture serverName');
+        }).populate('sender receiver', 'displayName avatarUrl serverName');
 
         const usersMap = new Map();
 
@@ -68,7 +68,12 @@ export const getChatHistoryUsers = async (req, res, next) => {
                 : msg.sender;
 
             if (!usersMap.has(otherUser._id.toString())) {
-                usersMap.set(otherUser._id.toString(), otherUser);
+                usersMap.set(otherUser._id.toString(), {
+                    _id: otherUser._id,
+                    username: otherUser.displayName,
+                    profilePicture: otherUser.avatarUrl,
+                    serverName: otherUser.serverName
+                });
             }
         });
 
