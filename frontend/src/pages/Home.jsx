@@ -18,9 +18,23 @@ function Home() {
   // fetch all local posts (for the "Local" tab)
   const fetchPosts = async () => {
     try {
+      setLoading(true);
       const token = localStorage.getItem('token');
 
-      const res = await fetch(`${API_BASE_URL}/posts`, {
+      let url = `${API_BASE_URL}/posts`; // Default for 'local'
+      if (activeTimeline === 'home') {
+        url = `${API_BASE_URL}/posts/timeline`;
+      } else if (activeTimeline === 'federated') {
+        // For now federated tab can just be an empty placeholder or a specific cross-server logic
+        // But getTimeline actually already includes remote posts, so 'home' is the federated aware one.
+        // We'll keep 'local' as strictly local /api/posts.
+        // For 'federated' specifically, we can use a server-filtered query if implemented.
+        setPosts([]);
+        setLoading(false);
+        return;
+      }
+
+      const res = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -66,8 +80,7 @@ function Home() {
 
   useEffect(() => {
     fetchPosts();
-    fetchFollowingPosts();
-  }, []);
+  }, [activeTimeline]);
 
   const handleTimelineChange = (timeline) => {
     setActiveTimeline(timeline);
@@ -112,14 +125,8 @@ function Home() {
   };
 
   const getFilteredPosts = () => {
-    switch (activeTimeline) {
-      case 'home':
-        return followingPosts;
-      case 'local':
-        return posts;
-      default:
-        return followingPosts;
-    }
+    // Return all posts since filtering is now handled by the server endpoints
+    return posts;
   };
 
   return (

@@ -1,6 +1,6 @@
 import { createError } from "../utils/error.js";
 import { getPostsByIdsService } from "../services/postService.js";
-import { getUserProfileService } from "../services/userService.js";
+import { getUserProfileService, searchUsersService } from "../services/userService.js";
 import { getChannelProfileService } from "../services/channelService.js";
 
 /**
@@ -32,6 +32,13 @@ export const federationFeed = async (req, res, next) => {
                 if (!federatedId) return next(createError(400, "federatedId is required"));
                 const channel = await getChannelProfileService(federatedId);
                 return res.status(200).json({ success: true, channel });
+            }
+
+            case "SEARCH_USERS": {
+                const { query } = req.query;
+                if (!query) return next(createError(400, "query is required"));
+                const users = await searchUsersService(query);
+                return res.status(200).json({ success: true, users });
             }
 
             default:
