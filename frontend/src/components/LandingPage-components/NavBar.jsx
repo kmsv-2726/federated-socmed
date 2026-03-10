@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
-import logo from '../../Images/Logo.png';
+import logo from '../../Images/logo.png';
 
 const DARK_BLUE = '#4F46E5';
 const WHITE = '#FFFFFF';
