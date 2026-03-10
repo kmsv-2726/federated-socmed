@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiThumbsUp, FiMessageCircle, FiShare2, FiMoreHorizontal, FiTrash2, FiSend, FiChevronUp, FiChevronDown } from 'react-icons/fi';
+import { useNavigate } from 'react-router-dom';
+import { FiThumbsUp, FiMessageCircle, FiShare2, FiMoreHorizontal, FiTrash2, FiSend, FiChevronUp, FiChevronDown, FiVolumeX } from 'react-icons/fi';
 
 const API_BASE_URL = "http://localhost:5000/api";
 
-const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
+const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onMuteUser }) => {
+  const navigate = useNavigate();
   const [openMenuId, setOpenMenuId] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [openCommentsId, setOpenCommentsId] = useState(null);
@@ -213,6 +215,37 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
     }
   };
 
+  const handleMute = async (post) => {
+    if (!window.confirm(`Are you sure you want to mute ${post.userDisplayName || post.author}? Their posts will no longer appear in your timeline.`)) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      // The federatedId is usually authorFederatedId. Fall back if not present.
+      const targetFedId = post.authorFederatedId || post.federatedId.split('/post/')[0];
+
+      const response = await fetch(`${API_BASE_URL}/mutes/${targetFedId}/toggle`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        if (onMuteUser) {
+          onMuteUser(targetFedId);
+        }
+        setOpenMenuId(null);
+        alert(data.message);
+      } else {
+        alert(data.message || 'Failed to mute user');
+      }
+    } catch (err) {
+      console.error('Error muting user:', err);
+      alert('Failed to mute user. Please try again.');
+    }
+  };
+
   const isOwnPost = (post) => {
     if (!currentUser) return false;
     if (currentUser.role === 'admin') return true;
@@ -258,7 +291,15 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
           <div key={post._id} className="post">
             {/* ── Header ── */}
             <div className="post-header">
-              <div className="post-author">
+              <div
+                className="post-author"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const targetFedId = post.authorFederatedId || (post.federatedId && post.federatedId.split('/post/')[0]);
+                  if (targetFedId) navigate(`/user/${targetFedId}`);
+                }}
+                style={{ cursor: 'pointer' }}
+              >
                 <div className="user-avatar">
                   {getInitials(post.userDisplayName || post.author)}
                 </div>
@@ -271,8 +312,12 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
                   </div>
                   <div className="post-time">
                     {formatTime(post.createdAt)}
-                    {post.serverName && (
-                      <span className="post-server-tag"> • {post.serverName}</span>
+                    {post.isRemote && (
+                      <span className="post-server-tag">
+                        {' • '}{post.isChannelPost && post.channelName
+                          ? `${post.channelName}@${post.originServer}`
+                          : post.authorFederatedId || `${post.userDisplayName || post.author}@${post.originServer}`}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -292,7 +337,12 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
                         <FiTrash2 /> Delete Post
                       </button>
                     ) : (
-                      <div className="dropdown-item disabled">No actions available</div>
+                      <button
+                        className="dropdown-item"
+                        onClick={() => handleMute(post)}
+                      >
+                        <FiVolumeX /> Mute User
+                      </button>
                     )}
                   </div>
                 )}

@@ -14,6 +14,7 @@ import federationRout from "./routes/federationRoute.js"
 import serverConfigRoute from "./routes/serverConfigRoute.js"
 import messageRoute from "./routes/messageRoute.js"
 import ServerConfig from "./models/ServerConfig.js"
+import muteRoute from "./routes/muteRoute.js"
 
 dotenv.config()
 
@@ -65,6 +66,7 @@ app.use("/api/reports", reportRoute)
 app.use("/api/federation", federationRout)
 app.use("/api/server-config", serverConfigRoute)
 app.use("/api/messages", messageRoute)
+app.use("/api/mutes", muteRoute)
 
 app.use((err, req, res, next) => {
   const errorStatus = err.status || 500
