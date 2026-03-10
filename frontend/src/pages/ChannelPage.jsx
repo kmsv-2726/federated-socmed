@@ -68,7 +68,17 @@ const ChannelPage = () => {
       });
       const data = await res.json();
       if (data.success) {
-        setCurrentChannel(data.channel);
+        let channelObj = null;
+        if (data.channel) {
+          channelObj = data.channel;
+        } else if (data.channels) {
+          if (Array.isArray(data.channels)) {
+            channelObj = data.channels.find(c => c.name === name) || data.channels[0];
+          } else {
+            channelObj = data.channels;
+          }
+        }
+        setCurrentChannel(channelObj);
       }
     } catch (err) {
       console.error('Error fetching channel details:', err);

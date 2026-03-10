@@ -195,7 +195,10 @@ function UserProfile() {
             <Layout>
                 <div className="profile-container">
                     <div className="profile-header">
-                        <div className="profile-cover">
+                        <div
+                            className="profile-cover"
+                            style={userProfile?.bannerUrl ? { backgroundImage: `url(${userProfile.bannerUrl})` } : {}}
+                        >
                             <button className="back-btn" onClick={() => navigate(-1)}>
                                 <FiArrowLeft /> Back
                             </button>

@@ -6,6 +6,7 @@ import {
   FiSlash, FiLock, FiServer, FiFileText, FiTrendingUp,
   FiHome, FiLogOut, FiTrash2, FiEdit, FiArrowUp, FiArrowDown
 } from 'react-icons/fi';
+import ImageCropperModal from '../components/ImageCropperModal';
 import '../styles/Admin.css';
 
 const API_BASE_URL = "http://localhost:5000/api";
@@ -39,6 +40,12 @@ const Admin = () => {
     visibility: 'public',
     image: ''
   });
+
+  // Cropper states
+  const [showCropper, setShowCropper] = useState(false);
+  const [tempImageSrc, setTempImageSrc] = useState(null);
+  const [cropperTarget, setCropperTarget] = useState(null); // 'create' or 'edit'
+
 
   useEffect(() => {
     const fetchData = async () => {
@@ -145,7 +152,8 @@ const Admin = () => {
     setEditingChannel(channel);
     setEditFormData({
       description: channel.description || '',
-      rules: Array.isArray(channel.rules) ? channel.rules.join('\n') : ''
+      rules: Array.isArray(channel.rules) ? channel.rules.join('\n') : '',
+      image: channel.image || ''
     });
     setEditModalOpen(true);
   };
@@ -164,9 +172,14 @@ const Admin = () => {
       await axios.put(`${API_BASE_URL}/channels/rules/${editingChannel.name}`,
         { rules: rulesArray }, config);
 
+      if (editFormData.image !== editingChannel.image) {
+        await axios.put(`${API_BASE_URL}/channels/image/${editingChannel.name}`,
+          { image: editFormData.image || '' }, config);
+      }
+
       setChannelsList(prev => prev.map(c =>
         c._id === editingChannel._id
-          ? { ...c, description: editFormData.description, rules: rulesArray }
+          ? { ...c, description: editFormData.description, rules: rulesArray, image: editFormData.image }
           : c
       ));
 
@@ -196,7 +209,7 @@ const Admin = () => {
         description: createFormData.description,
         rules: rulesArray,
         visibility: createFormData.visibility,
-        image: createFormData.image
+        image: createFormData.image // This is now a Base64 string from the FileReader
       }, config);
 
       if (response.data.success) {
@@ -211,6 +224,54 @@ const Admin = () => {
     }
   };
 
+  const handleChannelImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image is too large. Max 10MB allowed.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setTempImageSrc(reader.result);
+      setCropperTarget('create');
+      setShowCropper(true);
+      e.target.value = null; // reset
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleEditChannelImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image is too large. Max 10MB allowed.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setTempImageSrc(reader.result);
+      setCropperTarget('edit');
+      setShowCropper(true);
+      e.target.value = null; // reset
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCropperComplete = (croppedImageBase64) => {
+    if (cropperTarget === 'create') {
+      setCreateFormData(prev => ({ ...prev, image: croppedImageBase64 }));
+    } else if (cropperTarget === 'edit') {
+      setEditFormData(prev => ({ ...prev, image: croppedImageBase64 }));
+    }
+    setShowCropper(false);
+    setTempImageSrc(null);
+    setCropperTarget(null);
+  };
 
   const reviewReport = async (reportId, action) => {
     if (!action) {
@@ -724,6 +785,34 @@ const Admin = () => {
                   rows={5}
                 />
               </div>
+              <div className="form-group">
+                <label>Channel Image</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleEditChannelImageChange}
+                    style={{ padding: '8px', border: '1px solid #e5e7eb', borderRadius: '4px' }}
+                  />
+                  {editFormData.image && (
+                    <div style={{ position: 'relative', width: '200px', height: '100px', borderRadius: '8px', overflow: 'hidden' }}>
+                      <img
+                        src={editFormData.image}
+                        alt="Channel Preview"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setEditFormData(prev => ({ ...prev, image: '' }))}
+                        style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="modal-actions">
                 <button type="button" className="action-btn-sm" onClick={() => setEditModalOpen(false)}>Cancel</button>
                 <button type="submit" className="primary-btn">Save Changes</button>
@@ -778,13 +867,31 @@ const Admin = () => {
                 </select>
               </div>
               <div className="form-group">
-                <label>Image URL (optional)</label>
-                <input
-                  type="text"
-                  value={createFormData.image}
-                  onChange={(e) => setCreateFormData(prev => ({ ...prev, image: e.target.value }))}
-                  placeholder="https://example.com/image.jpg"
-                />
+                <label>Channel Image</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleChannelImageChange}
+                    style={{ padding: '8px', border: '1px solid #e5e7eb', borderRadius: '4px' }}
+                  />
+                  {createFormData.image && (
+                    <div style={{ position: 'relative', width: '200px', height: '100px', borderRadius: '8px', overflow: 'hidden' }}>
+                      <img
+                        src={createFormData.image}
+                        alt="Channel Preview"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setCreateFormData(prev => ({ ...prev, image: '' }))}
+                        style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="modal-actions">
                 <button type="button" className="action-btn-sm" onClick={() => setCreateModalOpen(false)}>Cancel</button>
@@ -793,6 +900,19 @@ const Admin = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {showCropper && tempImageSrc && (
+        <ImageCropperModal
+          imageSrc={tempImageSrc}
+          aspect={2 / 1}
+          onComplete={handleCropperComplete}
+          onCancel={() => {
+            setShowCropper(false);
+            setTempImageSrc(null);
+            setCropperTarget(null);
+          }}
+        />
       )}
     </div>
   );

@@ -96,6 +96,8 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
       <div className="empty-state">
         {activeTimeline === 'federated'
           ? 'Federated timeline is empty'
+          : activeTimeline === 'home'
+          ? 'No posts yet. Follow some users to see their posts here!'
           : 'No posts yet. Be the first to post!'}
       </div>
     );

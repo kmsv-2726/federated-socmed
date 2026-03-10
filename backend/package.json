@@ -21,7 +21,8 @@
     "fast-json-stable-stringify": "^2.1.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.22.0",
-    "nodemailer": "^8.0.1"
+    "nodemailer": "^8.0.1",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",

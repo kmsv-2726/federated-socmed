@@ -12,6 +12,7 @@ import {
   FiSave,
   FiAlertTriangle
 } from 'react-icons/fi';
+import ImageCropperModal from '../ImageCropperModal';
 import '../../styles/Settings.css';
 
 const API_BASE_URL = "http://localhost:5000/api";
@@ -23,6 +24,10 @@ function Settings() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
+
+  // Cropper state
+  const [showCropper, setShowCropper] = useState(false);
+  const [tempImageSrc, setTempImageSrc] = useState(null);
 
   const getUserData = () => {
     const user = localStorage.getItem('user');
@@ -42,6 +47,7 @@ function Settings() {
     displayName: user?.displayName || '',
     email: user?.email || '',
     dob: user?.dob ? new Date(user.dob).toISOString().split('T')[0] : '',
+    bannerUrl: user?.bannerUrl || '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
@@ -55,6 +61,30 @@ function Settings() {
     }));
     // clear message when user starts editing
     setMessage({ text: '', type: '' });
+  };
+
+  const handleBannerChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      showMsg('Image is too large. Max 10MB allowed.', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setTempImageSrc(reader.result);
+      setShowCropper(true);
+      e.target.value = null; // reset input
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCropperComplete = (croppedImageBase64) => {
+    setFormData(prev => ({ ...prev, bannerUrl: croppedImageBase64 }));
+    setShowCropper(false);
+    setTempImageSrc(null);
   };
 
   const showMsg = (text, type = 'success') => {
@@ -75,7 +105,8 @@ function Settings() {
         body: JSON.stringify({
           displayName: formData.displayName,
           email: formData.email,
-          dob: formData.dob
+          dob: formData.dob,
+          bannerUrl: formData.bannerUrl
         })
       });
 
@@ -253,6 +284,34 @@ function Settings() {
                   />
                 </div>
 
+                <div className="form-group">
+                  <label>Profile Banner</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleBannerChange}
+                      style={{ padding: '8px', border: '1px solid #e5e7eb', borderRadius: '4px', background: 'white' }}
+                    />
+                    {formData.bannerUrl && (
+                      <div style={{ position: 'relative', width: '100%', height: '120px', borderRadius: '8px', overflow: 'hidden' }}>
+                        <img
+                          src={formData.bannerUrl}
+                          alt="Banner Preview"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, bannerUrl: '' }))}
+                          style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', borderRadius: '50%', width: '28px', height: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <button className="btn-primary" onClick={handleSaveProfile} disabled={saving}>
                   <FiSave /> {saving ? 'Saving...' : 'Save Changes'}
                 </button>
@@ -386,6 +445,18 @@ function Settings() {
             </div>
           </div>
         </div>
+      )}
+
+      {showCropper && tempImageSrc && (
+        <ImageCropperModal
+          imageSrc={tempImageSrc}
+          aspect={3 / 1}
+          onComplete={handleCropperComplete}
+          onCancel={() => {
+            setShowCropper(false);
+            setTempImageSrc(null);
+          }}
+        />
       )}
     </Layout>
   );

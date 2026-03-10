@@ -157,7 +157,10 @@ function Profile() {
     <Layout>
       <div className="profile-container">
         <div className="profile-header">
-          <div className="profile-cover"></div>
+          <div
+            className="profile-cover"
+            style={user?.bannerUrl ? { backgroundImage: `url(${user.bannerUrl})` } : {}}
+          ></div>
           <div className="profile-info">
             <div className="profile-avatar-large">
               {getInitials(user?.displayName)}
