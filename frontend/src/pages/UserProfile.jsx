@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import PostList from '../components/PostList';
-import { FiMapPin, FiCalendar, FiArrowLeft, FiUserPlus, FiUserMinus, FiX } from 'react-icons/fi';
+import { FiMapPin, FiCalendar, FiArrowLeft, FiUserPlus, FiUserMinus, FiX, FiVolumeX, FiVolume2 } from 'react-icons/fi';
 import '../styles/Profile.css';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api");
@@ -24,6 +24,8 @@ function UserProfile() {
     const [modalTitle, setModalTitle] = useState('');
     const [modalUsers, setModalUsers] = useState([]);
     const [modalLoading, setModalLoading] = useState(false);
+    const [isMuted, setIsMuted] = useState(false);
+    const [muteLoading, setMuteLoading] = useState(false);
 
     const currentUser = (() => {
         const u = localStorage.getItem('user');
@@ -101,6 +103,44 @@ function UserProfile() {
         };
         checkFollow();
     }, [decodedId, isOwnProfile]);
+
+    // check mute status
+    useEffect(() => {
+        if (isOwnProfile) return;
+        const checkMute = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(
+                    `${API_BASE_URL}/mutes/${encodeURIComponent(decodedId)}/status`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+                const data = await res.json();
+                if (data.success) setIsMuted(data.isMuted);
+            } catch {
+                console.error('Error checking mute status');
+            }
+        };
+        checkMute();
+    }, [decodedId, isOwnProfile]);
+
+    const handleMuteToggle = async () => {
+        setMuteLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(
+                `${API_BASE_URL}/mutes/${encodeURIComponent(decodedId)}/toggle`,
+                { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            const data = await res.json();
+            if (data.success) {
+                setIsMuted(data.isMuted);
+            }
+        } catch {
+            console.error('Error toggling mute');
+        } finally {
+            setMuteLoading(false);
+        }
+    };
 
     const openUserListModal = async (type) => {
         setModalOpen(true);
@@ -211,13 +251,23 @@ function UserProfile() {
                                 <div className="profile-name-row">
                                     <h1>{userProfile.displayName}</h1>
                                     {!isOwnProfile && (
-                                        <button
-                                            className={`follow-btn ${isFollowing ? 'following' : ''}`}
-                                            onClick={handleFollowToggle}
-                                            disabled={followLoading}
-                                        >
-                                            {isFollowing ? <><FiUserMinus /> Unfollow</> : <><FiUserPlus /> Follow</>}
-                                        </button>
+                                        <div style={{ display: 'flex', gap: '10px' }}>
+                                            <button
+                                                className={`follow-btn ${isFollowing ? 'following' : ''}`}
+                                                onClick={handleFollowToggle}
+                                                disabled={followLoading}
+                                            >
+                                                {isFollowing ? <><FiUserMinus /> Unfollow</> : <><FiUserPlus /> Follow</>}
+                                            </button>
+                                            <button
+                                                className={`follow-btn ${isMuted ? 'muted' : ''}`}
+                                                onClick={handleMuteToggle}
+                                                disabled={muteLoading}
+                                                style={isMuted ? { backgroundColor: '#dc2626', color: '#fff', borderColor: '#dc2626' } : {}}
+                                            >
+                                                {isMuted ? <><FiVolume2 /> Unmute</> : <><FiVolumeX /> Mute</>}
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                                 <p className="username">@{userProfile.displayName}</p>

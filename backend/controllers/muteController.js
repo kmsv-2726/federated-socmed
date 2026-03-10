@@ -71,3 +71,30 @@ export const getMutedUsers = async (req, res, next) => {
         next(err);
     }
 };
+
+/**
+ * Check if the active user has muted a specific user
+ * GET /api/mutes/:federatedId/status
+ */
+export const checkMuteStatus = async (req, res, next) => {
+    try {
+        const muterFederatedId = req.user.federatedId;
+        const mutedFederatedId = req.params.federatedId;
+
+        if (!mutedFederatedId) {
+            return next(createError(400, "Target federatedId is required"));
+        }
+
+        const existingMute = await UserMute.findOne({
+            muterFederatedId,
+            mutedFederatedId
+        });
+
+        res.status(200).json({
+            success: true,
+            isMuted: !!existingMute
+        });
+    } catch (err) {
+        next(err);
+    }
+};

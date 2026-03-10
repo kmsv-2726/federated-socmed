@@ -250,7 +250,15 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onMuteUser }) =
     if (!currentUser) return false;
     if (currentUser.role === 'admin') return true;
     return post.federatedId?.includes(currentUser.federatedId) ||
-      post.userDisplayName === currentUser.displayName;
+      post.userDisplayName === currentUser.displayName ||
+      post.author === currentUser.displayName;
+  };
+
+  const isActuallyOwnPost = (post) => {
+    if (!currentUser) return false;
+    return post.federatedId?.includes(currentUser.federatedId) ||
+      post.userDisplayName === currentUser.displayName ||
+      post.author === currentUser.displayName;
   };
 
   const formatTime = (date) => {
@@ -329,14 +337,15 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onMuteUser }) =
                 </button>
                 {openMenuId === post._id && (
                   <div className="post-dropdown-menu">
-                    {isOwnPost(post) ? (
+                    {isOwnPost(post) && (
                       <button
                         className="dropdown-item delete-item"
                         onClick={() => handleDelete(post._id)}
                       >
                         <FiTrash2 /> Delete Post
                       </button>
-                    ) : (
+                    )}
+                    {!isActuallyOwnPost(post) && (
                       <button
                         className="dropdown-item"
                         onClick={() => handleMute(post)}
