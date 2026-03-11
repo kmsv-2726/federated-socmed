@@ -44,20 +44,29 @@ export const unlockAccount = async (req, res, next) => {
 
 export const loginUser = async (req, res, next) => {
   try {
-    const { displayName, email, password } = req.body;
-    if ((!displayName && !email) || !password) {
+    const { email, displayName, password } = req.body;
+    const identifier = email || displayName;
+    if (!identifier || !password) {
       return next(createError(400, "Missing credentials"));
     }
+
+    console.log(`[Auth-Sports] Login attempt for identifier: "${identifier}" on server: "${process.env.SERVER_NAME}"`);
 
     const user = await User.findOne({
       serverName: process.env.SERVER_NAME,
       isRemote: false,
-      $or: [{ displayName }, { email }]
+      $or: [
+        { displayName: { $regex: new RegExp(`^${identifier}$`, "i") } },
+        { email: identifier.toLowerCase() }
+      ]
     });
 
     if (!user) {
+      console.warn(`[Auth-Sports] User not found for identifier: "${identifier}"`);
       return next(createError(401, "Invalid credentials"));
     }
+
+    console.log(`[Auth-Sports] Found user: "${user.displayName}". Active: ${user.isActive}. Failed attempts: ${user.failedLoginAttempts}`);
 
     if (!user.isActive) {
       return next(createError(403, "Account is locked or inactive due to multiple failed login attempts. Please check your email for unlock instructions."));
@@ -197,3 +206,4 @@ export const registerUser = async (req, res, next) => {
     next(err);
   }
 };
+
