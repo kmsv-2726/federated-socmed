@@ -31,7 +31,7 @@ export const federationInbox = async (req, res, next) => {
     }
 
     // 2. Store event as incoming/pending for auditability
-    const eventDoc = await FederationEvent.create({
+    eventDoc = await FederationEvent.create({
       ...payload,
       direction: "incoming",
       senderServer: senderServer || payload.actor?.server || "unknown",
