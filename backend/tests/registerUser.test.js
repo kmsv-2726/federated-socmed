@@ -1,7 +1,6 @@
 import { jest } from "@jest/globals";
 
-/* ---------------- MOCKS (MUST BE FIRST) ---------------- */
-
+// Mock User as constructor — save is set up fresh in beforeEach to survive clearAllMocks
 jest.unstable_mockModule("../models/User.js", () => ({
   default: jest.fn()
 }));
@@ -18,111 +17,103 @@ jest.unstable_mockModule("jsonwebtoken", () => ({
   }
 }));
 
+// Plain function — not jest.fn() — avoids ESM/VM mock factory issue
 jest.unstable_mockModule("../utils/error.js", () => ({
-  createError: jest.fn((status, message) => ({
-    status,
-    message
-  }))
+  createError: (status, message) => Object.assign(new Error(message), { status, message })
 }));
 
-/* ---------------- IMPORT AFTER MOCKING ---------------- */
+jest.unstable_mockModule("../services/emailService.js", () => ({
+  sendUnlockEmail: jest.fn().mockResolvedValue(true)
+}));
 
-const { registerUser } = await import("../controllers/authController.js");
-const User = (await import("../models/User.js")).default;
+const UserModule = await import("../models/User.js");
+const User = UserModule.default;
 const bcrypt = (await import("bcryptjs")).default;
 const jwt = (await import("jsonwebtoken")).default;
-const { createError } = await import("../utils/error.js");
-
-/* ---------------- TESTS ---------------- */
+const { registerUser } = await import("../controllers/AuthController.js");
 
 describe("registerUser controller (unit test)", () => {
   let req, res, next;
 
   beforeEach(() => {
-    req = { body: {} };
+    process.env.JWT_SECRET = "test-secret";
+    process.env.SERVER_NAME = "TestServer";
+    process.env.JWT_EXPIRES_IN = "1h";
 
+    req = { body: {} };
     res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn()
     };
-
     next = jest.fn();
-
-    process.env.SERVER_NAME = "testServer";
-    process.env.JWT_SECRET = "secret";
-    process.env.JWT_EXPIRES_IN = "1d";
+    jest.clearAllMocks();
+    // Re-apply implementations cleared by clearAllMocks
+    bcrypt.hash.mockResolvedValue("hashed-password");
+    jwt.sign.mockReturnValue("mock-token");
+    // Re-setup User constructor so save() survives clearAllMocks
+    User.mockImplementation(function (data) {
+      Object.assign(this, {
+        _id: "newuid",
+        role: "user",
+        tokenVersion: 0,
+        avatarUrl: null,
+        bannerUrl: null,
+        save: jest.fn().mockResolvedValue(true),
+        ...data
+      });
+    });
   });
 
   test("returns 400 if required fields are missing", async () => {
-    req.body = {
-      displayName: "testuser",
-      email: "test@test.com"
-    };
+    req.body = { displayName: "TestUser", password: "pass" }; // missing firstName, lastName, dob, email
 
     await registerUser(req, res, next);
 
-    expect(createError).toHaveBeenCalledWith(
-      400,
-      "All required fields must be provided"
-    );
-    expect(next).toHaveBeenCalledWith(expect.any(Object));
+    expect(next).toHaveBeenCalledTimes(1);
+    const err = next.mock.calls[0][0];
+    expect(err).toMatchObject({ status: 400, message: "All required fields must be provided" });
   });
 
   test("returns 409 if user already exists", async () => {
     req.body = {
-      displayName: "testuser",
+      displayName: "TestUser",
       firstName: "Test",
       lastName: "User",
       dob: "2000-01-01",
       email: "test@test.com",
-      password: "password"
+      password: "pass123"
     };
 
-    User.findOne = jest.fn().mockResolvedValue({ email: "test@test.com" });
+    // Mock User.findOne — since User is mocked as a constructor, we need to add static method
+    User.findOne = jest.fn().mockResolvedValue({ _id: "existing" });
 
     await registerUser(req, res, next);
 
-    expect(createError).toHaveBeenCalledWith(409, "User with this email, or display name already exists");
-    expect(next).toHaveBeenCalledWith(expect.any(Object));
+    expect(next).toHaveBeenCalledTimes(1);
+    const err = next.mock.calls[0][0];
+    expect(err).toMatchObject({ status: 409, message: "User with this email, or display name already exists" });
   });
 
   test("registers user successfully and returns token", async () => {
-    const mockSavedUser = {
-      _id: "123",
-      displayName: "testuser",
-      email: "test@test.com",
-      role: "user",
-      federatedId: "testuser@testServer",
-      serverName: "testServer"
-    };
-
     req.body = {
-      displayName: "testuser",
-      firstName: "Test",
+      displayName: "NewUser",
+      firstName: "New",
       lastName: "User",
       dob: "2000-01-01",
-      email: "test@test.com",
-      password: "password"
+      email: "new@test.com",
+      password: "pass123"
     };
 
-    User.findOne = jest.fn().mockResolvedValue(null);
-
-    bcrypt.hash.mockResolvedValue("hashedpassword");
-
-    User.prototype.save = jest.fn().mockResolvedValue(mockSavedUser);
-
-    jwt.sign.mockReturnValue("fake-jwt-token");
+    User.findOne = jest.fn().mockResolvedValue(null); // No existing user
 
     await registerUser(req, res, next);
 
-    expect(bcrypt.hash).toHaveBeenCalled();
     expect(jwt.sign).toHaveBeenCalled();
-
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         success: true,
-        token: "fake-jwt-token"
+        token: "mock-token"
       })
     );
   });

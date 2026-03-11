@@ -1,6 +1,12 @@
 import request from 'supertest';
 import { jest } from '@jest/globals';
 
+// Mock verifyToken BEFORE importing testApp/routes — routes apply it per-route,
+// this replaces it with a no-op so testApp's own mock auth sets req.user instead.
+jest.unstable_mockModule('../middleware/verifyToken.js', () => ({
+    verifyToken: (req, res, next) => next()
+}));
+
 jest.unstable_mockModule('../services/postService.js', () => ({
     createPostService: jest.fn(),
     deletePostService: jest.fn(),
@@ -71,6 +77,8 @@ describe('Posting API', () => {
         });
 
         it('should reject more than 4 images', async () => {
+            postService.createPostService.mockResolvedValue({ description: 'Too many' });
+
             const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${token}`)

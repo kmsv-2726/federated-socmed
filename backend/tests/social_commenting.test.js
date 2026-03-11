@@ -1,6 +1,11 @@
 import request from 'supertest';
 import { jest } from '@jest/globals';
 
+// Mock verifyToken BEFORE importing testApp/routes
+jest.unstable_mockModule('../middleware/verifyToken.js', () => ({
+    verifyToken: (req, res, next) => next()
+}));
+
 jest.unstable_mockModule('../services/postService.js', () => ({
     createPostService: jest.fn(),
     deletePostService: jest.fn(),
