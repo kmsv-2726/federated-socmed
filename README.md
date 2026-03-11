@@ -187,10 +187,12 @@ npm run dev
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/posts` | Get all posts |
+| GET | `/api/posts/timeline` | Get user timeline |
 | POST | `/api/posts` | Create post |
 | DELETE | `/api/posts/:id` | Delete post |
-| PUT | `/api/posts/like/:id` | Like post |
-| PUT | `/api/posts/comment/:id` | Add comment |
+| PUT | `/api/posts/like/` | Like post |
+| PUT | `/api/posts/comment/` | Add comment |
+| POST | `/api/posts/repost` | Repost a post |
 
 ### Channels
 | Method | Endpoint | Description |
@@ -213,5 +215,12 @@ npm run dev
 | GET | `/api/reports` | Get all reports |
 | POST | `/api/reports` | Create report |
 | PUT | `/api/reports/:id/status` | Update report status |
+
+### Messages
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/messages/users` | Get users with chat history |
+| GET | `/api/messages/:targetUserId` | Get messages with specific user |
+| POST | `/api/messages` | Send a new direct message |
 
 ---
