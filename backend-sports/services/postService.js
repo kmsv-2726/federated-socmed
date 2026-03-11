@@ -1,4 +1,6 @@
 import Post from "../models/Post.js";
+import TrustedServer from "../models/TrustedServer.js";
+import axios from "axios";
 
 /*
   Create Post Business Logic
@@ -9,6 +11,7 @@ import Post from "../models/Post.js";
 export const createPostService = async ({
   description,
   image,
+  images,
   isUserPost,
   userDisplayName,
   authorFederatedId,
@@ -16,6 +19,7 @@ export const createPostService = async ({
   channelName,
   federatedId,
   originServer,
+  serverName,
   isRemote = false,
   isRepost = false,
   originalPostFederatedId = null,
@@ -25,6 +29,7 @@ export const createPostService = async ({
   const newPost = new Post({
     description,
     image: image || null,
+    images: images || [],
 
     isUserPost,
     userDisplayName: userDisplayName,
@@ -38,8 +43,8 @@ export const createPostService = async ({
     channelName: isChannelPost ? channelName : null,
 
     federatedId,
-    originServer,
-    serverName: originServer,
+    originServer: (originServer || process.env.SERVER_NAME).toLowerCase(),
+    serverName: (serverName || originServer || process.env.SERVER_NAME).toLowerCase(),
 
     isRemote: !!isRemote,
     federationStatus: isRemote ? "received" : "local",
@@ -128,8 +133,8 @@ export const getPostsByIdsService = async (userIds = [], channelIds = []) => {
     const channelNames = channelIds.map(id => id.split("@")[0]);
     orClauses.push({
       isChannelPost: true,
-      channelName: { $in: channelNames },
-      originServer: process.env.SERVER_NAME
+      channelName: { $in: channelNames.map(name => new RegExp(`^${name}$`, "i")) },
+      serverName: process.env.SERVER_NAME.toLowerCase()
     });
   }
 
@@ -138,4 +143,46 @@ export const getPostsByIdsService = async (userIds = [], channelIds = []) => {
   return await Post.find({ $or: orClauses })
     .sort({ createdAt: -1 })
     .limit(10);
+};
+
+/**
+ * Synchronizes posts from a remote channel into the local database.
+ * Used proactively when a user views a remote channel.
+ */
+export const syncRemoteChannelPosts = async (name, targetServer) => {
+  try {
+    const trusted = await TrustedServer.findOne({
+      serverName: { $regex: new RegExp("^" + targetServer + "$", "i") },
+      isActive: true
+    });
+
+    if (!trusted) return;
+
+    const { data } = await axios.get(
+      `${trusted.serverUrl}/api/federation/feed?type=GET_CHANNEL_POSTS&channelName=${name}&limit=20`,
+      {
+        headers: { "x-origin-server": process.env.SERVER_NAME },
+        timeout: 4000
+      }
+    );
+
+    if (data.success && Array.isArray(data.posts)) {
+      for (const p of data.posts) {
+        if (!p.federatedId) continue;
+        await Post.findOneAndUpdate(
+          { federatedId: p.federatedId },
+          { 
+            $set: { 
+              ...p, 
+              isRemote: true,
+              federationStatus: "received"
+            } 
+          },
+          { upsert: true }
+        );
+      }
+    }
+  } catch (error) {
+    console.error(`Sync failed for ${name}@${targetServer}:`, error.message);
+  }
 };

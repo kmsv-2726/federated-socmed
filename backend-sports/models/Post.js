@@ -15,6 +15,12 @@ const postSchema = new mongoose.Schema(
       default: null
     },
 
+    images: {
+      type: [String],
+      default: [],
+      validate: [arr => arr.length <= 4, 'Maximum 4 images allowed']
+    },
+
     isEditable: {
       type: Boolean,
       default: true
@@ -135,6 +141,16 @@ const postSchema = new mongoose.Schema(
             type: String,
             required: true,
             maxlength: 500
+          },
+
+          commentFederatedId: {
+            type: String,
+            default: null
+          },
+
+          originServer: {
+            type: String,
+            default: null
           },
 
           createdAt: {

@@ -10,6 +10,7 @@ import { createReportService } from "../services/reportService.js";
 import User from "../models/User.js";
 import Channel from "../models/Channel.js";
 import Post from "../models/Post.js";
+import ChannelFollow from "../models/ChannelFollow.js";
 
 export const federationInbox = async (req, res, next) => {
   let eventDoc = null; // Tracked outside try so catch can reliably mark it as failed
@@ -31,7 +32,7 @@ export const federationInbox = async (req, res, next) => {
     }
 
     // 2. Store event as incoming/pending for auditability
-    const eventDoc = await FederationEvent.create({
+    eventDoc = await FederationEvent.create({
       ...payload,
       direction: "incoming",
       senderServer: senderServer || payload.actor?.server || "unknown",
@@ -92,7 +93,7 @@ export const federationInbox = async (req, res, next) => {
         if (!post) throw createError(404, "Post not found");
 
         await addCommentService(post, {
-          displayName: payload.data.displayName,
+          displayName: payload.data.displayName || payload.actor.federatedId,
           image: payload.data.image || null,
           content: payload.data.content,
           commentFederatedId: `${payload.actor.federatedId}/comment/${crypto.randomUUID()}`,
@@ -102,9 +103,41 @@ export const federationInbox = async (req, res, next) => {
       }
 
       case "CREATE_POST": {
+        let isRemotePost = true;
+        let effectiveServerName = payload.actor.server;
+
+        if (payload.data.isChannelPost && payload.data.channelName) {
+          const channel = await Channel.findOne({ 
+            name: payload.data.channelName,
+            serverName: process.env.SERVER_NAME 
+          });
+
+          if (channel) {
+            // It's a local channel, so the post record is local to this server
+            isRemotePost = false;
+            effectiveServerName = process.env.SERVER_NAME;
+
+            // RBAC Check for Federated Posts
+            if (channel.visibility === 'read-only') {
+              throw createError(403, "This channel is read-only. External posts are not allowed.");
+            }
+            if (channel.visibility === 'private') {
+              const isMember = await ChannelFollow.findOne({
+                userFederatedId: payload.actor.federatedId,
+                channelFederatedId: channel.federatedId,
+                status: 'active'
+              });
+              if (!isMember) {
+                throw createError(403, "Actor is not a member of this private channel.");
+              }
+            }
+          }
+        }
+
         await createPostService({
           description: payload.data.description,
           image: payload.data.image || null,
+          images: payload.data.images || [],
           isUserPost: payload.data.isUserPost || false,
           userDisplayName: payload.data.userDisplayName,
           authorFederatedId: payload.actor.federatedId,
@@ -112,7 +145,8 @@ export const federationInbox = async (req, res, next) => {
           channelName: payload.data.channelName || null,
           federatedId: payload.object.federatedId,
           originServer: payload.actor.server,
-          isRemote: true,
+          serverName: effectiveServerName,
+          isRemote: isRemotePost,
           isRepost: payload.data.isRepost || false,
           originalPostFederatedId: payload.data.originalPostFederatedId || null,
           originalAuthorFederatedId: payload.data.originalAuthorFederatedId || null

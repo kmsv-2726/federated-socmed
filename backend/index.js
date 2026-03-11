@@ -15,7 +15,8 @@ import serverConfigRoute from "./routes/serverConfigRoute.js"
 import messageRoute from "./routes/messageRoute.js"
 import ServerConfig from "./models/ServerConfig.js"
 import searchRoute from "./routes/searchRoute.js"
-
+import serverRoute from "./routes/serverRoute.js"
+import activityRoute from "./routes/activityRoute.js"
 dotenv.config()
 
 const app = express()
@@ -67,6 +68,8 @@ app.use("/api/federation", federationRout)
 app.use("/api/server-config", serverConfigRoute)
 app.use("/api/messages", messageRoute)
 app.use("/api/search", searchRoute)
+app.use("/api/servers", serverRoute)
+app.use("/api/activities", activityRoute)
 
 app.use((err, req, res, next) => {
   const errorStatus = err.status || 500

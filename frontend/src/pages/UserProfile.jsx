@@ -67,7 +67,7 @@ function UserProfile() {
             try {
                 const token = localStorage.getItem('token');
                 const res = await fetch(
-                    `${API_BASE_URL}/posts?authorFederatedId=${encodeURIComponent(decodedId)}`,
+                    `${API_BASE_URL}/posts/users?authorFederatedId=${encodeURIComponent(decodedId)}`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
                 const data = await res.json();

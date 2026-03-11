@@ -20,6 +20,9 @@ const ChannelPage = () => {
   const [error, setError] = useState('');
   const [userRole, setUserRole] = useState('user');
   const [requested, setRequested] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [followStatus, setFollowStatus] = useState(null); // 'active', 'pending', or null
 
   useEffect(() => {
     try {
@@ -34,20 +37,22 @@ const ChannelPage = () => {
   }, []);
 
   // Fetch posts and filter for current channel
-  const fetchChannelPosts = async (name) => {
+  const fetchChannelPosts = async (name, pageNum = 1) => {
     try {
-      setLoading(true);
+      if (pageNum === 1) setLoading(true);
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/posts`, {
+      const res = await fetch(`${API_BASE_URL}/posts/channels?channelFederatedId=${encodeURIComponent(name)}&limit=10&page=${pageNum}`, {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
       if (data.success && Array.isArray(data.posts)) {
-        const filtered = data.posts.filter(
-          (p) => p.isChannelPost && p.channelName === name
-        );
-        setPosts(filtered);
+        if (pageNum === 1) {
+          setPosts(data.posts);
+        } else {
+          setPosts(prev => [...prev, ...data.posts]);
+        }
+        setHasMore(data.hasMore || false);
       } else {
         setError(data.message || 'Failed to fetch posts');
       }
@@ -55,8 +60,14 @@ const ChannelPage = () => {
       setError('Network error. Please try again.');
       console.error('Error fetching channel posts:', err);
     } finally {
-      setLoading(false);
+      if (pageNum === 1) setLoading(false);
     }
+  };
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchChannelPosts(decodedChannelName, nextPage);
   };
 
   // Fetch channel details
@@ -90,14 +101,35 @@ const ChannelPage = () => {
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/channels/follow/${encodeURIComponent(name)}`, {
+        method: 'GET',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
       if (data.success) {
         setIsFollowing(data.isFollowing);
+        setFollowStatus(data.status);
       }
     } catch (err) {
       console.error('Error checking follow status:', err);
+    }
+  };
+
+  const handleRequestAccess = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/channels/request/${encodeURIComponent(decodedChannelName)}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFollowStatus('pending');
+        setRequested(true);
+      } else {
+        setError(data.message || 'Failed to request access');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
     }
   };
 
@@ -118,6 +150,12 @@ const ChannelPage = () => {
         setIsFollowing(!isFollowing);
         // Refresh channel details to get updated follower count
         fetchChannelDetails(decodedChannelName);
+        // Also update followStatus if it was 'active' and now unfollowed
+        if (isFollowing) {
+          setFollowStatus(null);
+        } else {
+          setFollowStatus('active');
+        }
       }
     } catch (err) {
       console.error('Error toggling follow:', err);
@@ -159,95 +197,98 @@ const ChannelPage = () => {
       console.error('Error deleting post:', err);
     }
   };
+
+  const handlePostCreated = (newPost) => {
+    setPosts([newPost, ...posts]);
+  };
+
   useEffect(() => {
     if (decodedChannelName) {
       const req = JSON.parse(localStorage.getItem('requestedChannels') || '[]');
       setRequested(Array.isArray(req) ? req.includes(decodedChannelName) : false);
+      setPage(1);
+      setPosts([]);
       fetchChannelDetails(decodedChannelName);
-      fetchChannelPosts(decodedChannelName);
+      fetchChannelPosts(decodedChannelName, 1);
       checkFollowStatus(decodedChannelName);
     }
   }, [decodedChannelName]);
 
   const getDisplayName = (name) => {
     if (!name) return '';
-    return name.charAt(0).toUpperCase() + name.slice(1);
+    const cleanName = name.includes('@') ? name.split('@')[0] : name;
+    return cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
   };
+
+  const user = { role: userRole }; // For RBAC checks
 
   return (
     <Layout>
       <div className="channel-page-container">
-        {/* Channel Hero Section */}
-        <div className="channel-hero">
-          <div className={currentChannel?.image ? "hero-banner" : "hero-banner placeholder"}
-            style={currentChannel?.image ? { backgroundImage: `url(${currentChannel.image})` } : {}}>
-            {currentChannel?.image && <div className="banner-overlay"></div>}
-            {!currentChannel?.image && (currentChannel?.visibility === 'private' ? <FiLock /> : <FiHash />)}
-          </div>
+        {currentChannel ? (
+          <div className="channel-hero">
+            <div className={`hero-banner ${currentChannel.image ? '' : 'placeholder'}`}
+                 style={currentChannel.image ? { backgroundImage: `url(${currentChannel.image})` } : {}}>
+              {!currentChannel.image && (currentChannel.visibility === 'private' ? <FiLock /> : <FiHash />)}
+              <div className="banner-overlay"></div>
+            </div>
 
-          <div className={currentChannel?.image ? "hero-content has-image" : "hero-content"}>
-            <div className="hero-main">
-              {currentChannel?.image && (
+            <div className="hero-content has-image">
+              <div className="hero-main">
                 <div className="channel-avatar-large">
-                  <img src={currentChannel.image} alt="" />
+                   <img src={currentChannel.image || 'https://via.placeholder.com/150'} alt={currentChannel.name} />
                 </div>
-              )}
-              <div className={currentChannel?.image ? "hero-text on-dark" : "hero-text on-light"}>
-                <div className={currentChannel?.image ? "channel-meta on-dark" : "channel-meta on-light"}>
-                  {currentChannel?.visibility === 'public'
-                    ? 'Public Community'
-                    : currentChannel?.visibility === 'read-only'
-                      ? 'Read-only Community'
-                      : 'Private Community'} • {currentChannel?.followersCount || 0} followers
+                <div className="hero-text on-dark">
+                  <div className="channel-meta on-dark">
+                    <span>{currentChannel.visibility.charAt(0).toUpperCase() + currentChannel.visibility.slice(1)} Channel</span>
+                    <span> • </span>
+                    <span>{currentChannel.followersCount || 0} followers</span>
+                  </div>
+                  <h1>{getDisplayName(currentChannel.name)}</h1>
                 </div>
-                <h1>{getDisplayName(decodedChannelName)}</h1>
+              </div>
+
+              <div className="hero-actions">
+                {currentChannel.visibility === 'private' && followStatus !== 'active' ? (
+                  <button
+                    className={`btn-follow-toggle ${followStatus === 'pending' ? 'following' : 'join'}`}
+                    onClick={followStatus === 'pending' ? null : handleRequestAccess}
+                    disabled={followStatus === 'pending'}
+                  >
+                    {followStatus === 'pending' ? 'Request Pending' : 'Request Access'}
+                  </button>
+                ) : (
+                  <button
+                    className={`btn-follow-toggle ${isFollowing ? 'following' : 'join'}`}
+                    onClick={handleFollowToggle}
+                  >
+                    {isFollowing ? (currentChannel.visibility === 'read-only' ? 'Following' : 'Joined') : (currentChannel.visibility === 'read-only' ? 'Follow' : 'Join')}
+                  </button>
+                )}
               </div>
             </div>
 
-            {currentChannel?.visibility === 'private' ? (
-              <button
-                className={requested ? "btn-follow-toggle following" : "btn-follow-toggle join"}
-                onClick={() => {
-                  const prev = JSON.parse(localStorage.getItem('requestedChannels') || '[]');
-                  const next = Array.isArray(prev)
-                    ? (requested ? prev.filter(n => n !== decodedChannelName) : [...prev, decodedChannelName])
-                    : [decodedChannelName];
-                  localStorage.setItem('requestedChannels', JSON.stringify(next));
-                  setRequested(!requested);
-                }}
-              >
-                {requested ? 'Requested' : 'Request Access'}
-              </button>
-            ) : (
-              <button
-                className={isFollowing ? "btn-follow-toggle following" : "btn-follow-toggle join"}
-                onClick={handleFollowToggle}
-              >
-                {isFollowing ? 'Joined' : 'Join Community'}
-              </button>
-            )}
-          </div>
-
-          {currentChannel?.description && (
             <div className="hero-description">
-              {currentChannel.description}
+              <p>{currentChannel.description}</p>
             </div>
-          )}
-        </div>
+          </div>
+        ) : null}
+
+        {error && <div className="error-message">{error}</div>}
 
         {/* Create Post Section - RBAC enforced */}
-        {canPostInChannel({ role: userRole }, currentChannel, isFollowing) ? (
+        {canPostInChannel(user, currentChannel, isFollowing) ? (
           <PostCreator
             isChannelPost={true}
             channelName={decodedChannelName}
-            onPostCreated={(newPost) => setPosts([newPost, ...posts])}
+            onPostCreated={handlePostCreated}
           />
         ) : (
           <div className="empty-state channel-restricted-msg">
             <FiAlertCircle size={20} />
             <span>
-              {currentChannel?.visibility === 'read-only' 
-                ? 'This channel is read-only. Only admins can post here.' 
+              {currentChannel?.visibility === 'read-only'
+                ? 'This channel is read-only. Only admins can post here.'
                 : currentChannel?.visibility === 'private' && !isFollowing
                   ? 'Join this community to participate in discussions.'
                   : 'You do not have permission to post in this channel.'}
@@ -260,18 +301,32 @@ const ChannelPage = () => {
           <div className="loading-state">Loading posts...</div>
         ) : error ? (
           <div className="empty-state" style={{ color: '#dc2626' }}>{error}</div>
-        ) : !canViewChannelContent({ role: userRole }, currentChannel, isFollowing) ? (
+        ) : !canViewChannelContent(user, currentChannel, isFollowing) ? (
           <div className="empty-state">
             <FiLock size={48} style={{ marginBottom: '16px', color: '#6b7280' }} />
             <h3>This is a private community</h3>
             <p>Request access or join to view discussions and posts.</p>
           </div>
         ) : (
-          <PostList
-            posts={posts}
-            onLike={handleLikePost}
-            onDelete={handleDeletePost}
-          />
+          <>
+            <PostList
+              posts={posts}
+              onLike={handleLikePost}
+              onDelete={handleDeletePost}
+            />
+            {hasMore && (
+              <div className="load-more-container">
+                <button className="btn-load-more" onClick={handleLoadMore}>
+                  View More
+                </button>
+              </div>
+            )}
+            {!hasMore && posts.length > 0 && (
+              <div className="no-more-posts">
+                No more posts to show
+              </div>
+            )}
+          </>
         )}
       </div>
     </Layout>

@@ -1,7 +1,8 @@
 import User from "../models/User.js";
 import UserFollow from "../models/UserFollow.js";
+import Post from "../models/Post.js";
+import bcrypt from "bcryptjs";
 import { createError } from "../utils/error.js";
-import bcrypt from "bcrypt";
 import {
   followUserService,
   unfollowUserService
@@ -9,7 +10,7 @@ import {
 import { sendFederationEvent } from "../services/federationService.js";
 import TrustedServer from "../models/TrustedServer.js";
 import axios from "axios";
-import { getUserProfileService } from "../services/userService.js";
+import { getUserProfileService, searchUsersService, enrichWithFollowStatus } from "../services/userService.js";
 /**
  * Parses a federatedId and determines if the target lives on this server.
  * Returns { targetOriginServer, isRemote } or throws a 400 error.
@@ -26,10 +27,99 @@ const resolveFollowTarget = (targetFederatedId, next) => {
 
 export const getAllProfiles = async (req, res, next) => {
   try {
+    const search = req.query.search || req.query.name || "";
+    const limit = parseInt(req.query.limit) || 5;
+
+    if (!search) {
+      const users = await User.find(
+        {},
+        { displayName: 1, avatarUrl: 1, federatedId: 1, followersCount: 1, followingCount: 1 }
+      ).limit(limit);
+
+      const enrichedUsers = await enrichWithFollowStatus(users, req.user?.federatedId);
+
+      return res.status(200).json({
+        success: true,
+        users: enrichedUsers,
+        searchType: "local",
+        count: enrichedUsers.length,
+        query: ""
+      });
+    }
+
+    if (search.includes("@")) {
+      const parts = search.split("@");
+      const targetServer = parts[1];
+
+      if (targetServer === process.env.SERVER_NAME) {
+        // Local server search by federatedId
+        const users = await User.find(
+          { federatedId: search },
+          { displayName: 1, avatarUrl: 1, federatedId: 1, followersCount: 1, followingCount: 1 }
+        ).limit(limit);
+
+        const enrichedUsers = await enrichWithFollowStatus(users, req.user?.federatedId);
+
+        return res.status(200).json({
+          success: true,
+          users: enrichedUsers,
+          searchType: "local",
+          count: enrichedUsers.length,
+          query: search
+        });
+      } else {
+        // Remote server search
+        const trusted = await TrustedServer.findOne({ serverName: targetServer, isActive: true });
+        if (!trusted) {
+          return next(createError(403, `Server ${targetServer} is not trusted or offline`));
+        }
+
+        try {
+          const { data } = await axios.get(
+            `${trusted.serverUrl}/api/federation/feed?type=SEARCH_USERS&query=${encodeURIComponent(search)}`,
+            {
+              headers: { "x-origin-server": process.env.SERVER_NAME },
+              timeout: 5000
+            }
+          );
+          // Ensure metadata is present even from remote responses
+          const enrichedUsers = await enrichWithFollowStatus(data.users || [], req.user?.federatedId);
+          return res.status(200).json({
+            ...data,
+            users: enrichedUsers,
+            searchType: data.searchType || "federated",
+            query: data.query || search
+          });
+        } catch (error) {
+          return next(createError(502, "Failed to fetch remote users profile"));
+        }
+      }
+    } else {
+      // Regex local search when no '@' is present
+      const users = await searchUsersService(search, limit);
+      const enrichedUsers = await enrichWithFollowStatus(users, req.user?.federatedId);
+      return res.status(200).json({
+        success: true,
+        users: enrichedUsers,
+        searchType: "local",
+        count: enrichedUsers.length,
+        query: search
+      });
+    }
+
+  } catch (err) {
+    next(err);
+  }
+}
+
+export const getTopUsers = async (req, res, next) => {
+  try {
     const users = await User.find(
       {},
-      { displayName: 1, avatarUrl: 1, federatedId: 1, followersCount: 1, followingCount: 1 }
-    );
+      { displayName: 1, avatarUrl: 1, federatedId: 1, followersCount: 1 }
+    )
+      .sort({ followersCount: -1 })
+      .limit(5);
 
     res.status(200).json({
       success: true,
@@ -104,7 +194,7 @@ export const followUser = async (req, res, next) => {
         targetFederatedId,
         req.user.serverName,
         targetOriginServer,
-        true
+        true // isRemote: true
       );
 
       return res.status(200).json({
@@ -255,6 +345,39 @@ export const getMyFollowing = async (req, res, next) => {
 };
 
 
+// update profile fields (displayName, email, dob)
+export const updateProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.federatedId;
+    const { displayName, email, dob } = req.body;
+
+    const updateFields = {};
+    if (displayName) updateFields.displayName = displayName;
+    if (email) updateFields.email = email;
+    if (dob) updateFields.dob = new Date(dob);
+    if (req.body.bannerUrl !== undefined) updateFields.bannerUrl = req.body.bannerUrl;
+
+    const updatedUser = await User.findOneAndUpdate(
+      { federatedId: userId },
+      { $set: updateFields },
+      { new: true, select: '-password' }
+    );
+
+    if (!updatedUser) {
+      return next(createError(404, "User not found"));
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      user: updatedUser
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// change password
 export const resetPassword = async (req, res, next) => {
   try {
     const { oldPassword, newPassword } = req.body;
@@ -291,4 +414,65 @@ export const resetPassword = async (req, res, next) => {
   }
 };
 
+// delete account and all associated data on local server
+export const deleteAccount = async (req, res, next) => {
+  try {
+    const userId = req.user.federatedId;
+
+    // delete user's posts on local server
+    await Post.deleteMany({ federatedId: { $regex: `^${userId}` } });
+
+    // remove follow relationships
+    await UserFollow.deleteMany({
+      $or: [
+        { followerFederatedId: userId },
+        { followingFederatedId: userId }
+      ]
+    });
+
+    // delete the user
+    await User.findOneAndDelete({ federatedId: userId });
+
+    res.status(200).json({
+      success: true,
+      message: "Account deleted successfully"
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const searchUsers = async (req, res, next) => {
+  try {
+    const { q } = req.query;
+    if (!q) {
+      return res.status(200).json({ success: true, users: [] });
+    }
+
+    // Attempt to split query in case it comes through as "username:0:0"
+    const parsedQuery = q.split(':')[0].trim();
+
+    let users = await User.find(
+      { displayName: { $regex: new RegExp(parsedQuery, 'i') } },
+      { displayName: 1, avatarUrl: 1, federatedId: 1, serverName: 1 }
+    ).limit(10);
+
+    users = await enrichWithFollowStatus(users, req.user?.federatedId);
+
+    // Map to the shape expected by DirectMessage.jsx
+    users = users.map(u => ({
+      _id: u._id,
+      username: u.displayName,
+      profilePicture: u.avatarUrl,
+      serverName: u.serverName
+    }));
+
+    res.status(200).json({
+      success: true,
+      users
+    });
+  } catch (err) {
+    next(err);
+  }
+};
 

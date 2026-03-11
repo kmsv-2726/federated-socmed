@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   FiUser,
   FiImage,
@@ -14,13 +14,39 @@ const PostCreator = ({ onPostCreated, isChannelPost = false, channelName = null 
   const [selectedImages, setSelectedImages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
-  const textareaRef = useRef(null);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        setUser(JSON.parse(userStr));
+      } catch (err) {
+        console.error('Error parsing user data:', err);
+      }
+    }
+  }, []);
 
   const handleImageClick = () => {
     fileInputRef.current.click();
+  };
+
+  const adjustTextareaHeight = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  };
+
+  const handleContentChange = (e) => {
+    setPostContent(e.target.value);
+    setError('');
+    adjustTextareaHeight();
   };
 
   const handleImageChange = (e) => {
@@ -115,17 +141,22 @@ const PostCreator = ({ onPostCreated, isChannelPost = false, channelName = null 
   return (
     <div className="post-creator">
       <div className="post-creator-header">
-        <div className="user-avatar">
-          <FiUser />
+        <div className="user-avatar creator-avatar">
+          {user?.image ? (
+            <img src={user.image} alt={user.displayName} />
+          ) : (
+            <span>{user?.displayName?.charAt(0).toUpperCase() || <FiUser />}</span>
+          )}
         </div>
 
         <textarea
           placeholder="What's on your mind?"
           value={postContent}
-          onChange={(e) => { setPostContent(e.target.value); setError(''); }}
+          onChange={handleContentChange}
           onKeyPress={handleKeyPress}
           disabled={loading}
           ref={textareaRef}
+          rows={1}
         />
       </div>
 
@@ -181,9 +212,10 @@ const PostCreator = ({ onPostCreated, isChannelPost = false, channelName = null 
         )}
 
         <button
-          className="post-btn"
+          className={`post-btn ${(!postContent.trim() && selectedImages.length === 0) ? 'btn-disabled' : 'btn-active'}`}
           onClick={handleCreatePost}
           disabled={loading || (!postContent.trim() && selectedImages.length === 0)}
+          title={(!postContent.trim() && selectedImages.length === 0) ? "Enter some text or add an image to post" : ""}
         >
           {loading ? 'Posting...' : 'Post'}
         </button>
