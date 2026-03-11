@@ -1,15 +1,13 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import postRoute from '../routes/postRoute.js';
-import userRoute from '../routes/userRoute.js';
-import messageRoute from '../routes/messageRoute.js';
 
 const TEST_SECRET = 'test-secret';
 
 /**
  * Creates a test Express app with full social routes and a mock auth middleware.
+ * Must be async because route modules need mocks to be resolved first.
  */
-export const createTestApp = () => {
+export const createTestApp = async () => {
     const app = express();
     app.use(express.json({ limit: '50mb' }));
 
@@ -27,10 +25,12 @@ export const createTestApp = () => {
         next();
     });
 
-    // Social Routes
+    // Dynamically import routes AFTER mocks are set up
+    const postRoute = (await import('../routes/postRoute.js')).default;
+    const userRoute = (await import('../routes/userRoute.js')).default;
+
     app.use('/api/posts', postRoute);
     app.use('/api/user', userRoute);
-    app.use('/api/messages', messageRoute);
 
     // Error handler
     app.use((err, req, res, next) => {

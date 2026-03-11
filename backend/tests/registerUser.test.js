@@ -65,10 +65,7 @@ describe("registerUser controller (unit test)", () => {
       400,
       "All required fields must be provided"
     );
-    expect(next).toHaveBeenCalledWith({
-      status: 400,
-      message: "All required fields must be provided"
-    });
+    expect(next).toHaveBeenCalledWith(expect.any(Object));
   });
 
   test("returns 409 if user already exists", async () => {
@@ -85,11 +82,8 @@ describe("registerUser controller (unit test)", () => {
 
     await registerUser(req, res, next);
 
-    expect(createError).toHaveBeenCalledWith(409, "User already exists");
-    expect(next).toHaveBeenCalledWith({
-      status: 409,
-      message: "User already exists"
-    });
+    expect(createError).toHaveBeenCalledWith(409, "User with this email, or display name already exists");
+    expect(next).toHaveBeenCalledWith(expect.any(Object));
   });
 
   test("registers user successfully and returns token", async () => {

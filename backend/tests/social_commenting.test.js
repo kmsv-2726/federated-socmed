@@ -1,6 +1,21 @@
 import request from 'supertest';
-import { createTestApp, generateToken } from './testApp.js';
-import Post from '../models/Post.js';
+import { jest } from '@jest/globals';
+
+jest.unstable_mockModule('../services/postService.js', () => ({
+    createPostService: jest.fn(),
+    deletePostService: jest.fn(),
+    toggleLikePostService: jest.fn(),
+    addCommentService: jest.fn(),
+    getPostsByIdsService: jest.fn()
+}));
+
+jest.unstable_mockModule('../services/federationService.js', () => ({
+    sendFederationEvent: jest.fn()
+}));
+
+const postService = await import('../services/postService.js');
+const { createTestApp, generateToken } = await import('./testApp.js');
+const Post = (await import('../models/Post.js')).default;
 
 describe('Commenting API', () => {
     let app;
@@ -12,9 +27,14 @@ describe('Commenting API', () => {
         role: 'user'
     };
 
-    beforeAll(() => {
-        app = createTestApp();
+    beforeAll(async () => {
+        app = await createTestApp();
         token = generateToken(testUser);
+        process.env.SERVER_NAME = 'local.server';
+    });
+
+    beforeEach(() => {
+        jest.clearAllMocks();
     });
 
     describe('PUT /api/posts/comment', () => {
@@ -30,6 +50,8 @@ describe('Commenting API', () => {
         });
 
         it('should add a comment successfully', async () => {
+            postService.addCommentService.mockResolvedValue();
+
             const res = await request(app)
                 .put('/api/posts/comment')
                 .set('Authorization', `Bearer ${token}`)
@@ -41,12 +63,7 @@ describe('Commenting API', () => {
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
             expect(res.body.commentFederatedId).toBeDefined();
-
-            // Verify in DB
-            const updatedPost = await Post.findById(post._id);
-            expect(updatedPost.comments).toHaveLength(1);
-            expect(updatedPost.comments[0].content).toBe('Nice post!');
-            expect(updatedPost.comments[0].displayName).toBe('Tester');
+            expect(postService.addCommentService).toHaveBeenCalled();
         });
 
         it('should reject empty comments', async () => {

@@ -18,11 +18,18 @@ jest.unstable_mockModule('../../models/UserFollow.js', () => ({
     },
 }));
 
+jest.unstable_mockModule('../../services/userService.js', () => ({
+    getUserProfileService: jest.fn(),
+    followUserService: jest.fn(),
+    unfollowUserService: jest.fn(),
+}));
+
 // Import the module under test and mocked dependencies
 // Note: Imports must be dynamic to ensure mocks are applied first
 const { getAllProfiles, getUserProfile } = await import('../../controllers/userController.js');
 const User = (await import('../../models/User.js')).default;
 const UserFollow = (await import('../../models/UserFollow.js')).default;
+const { getUserProfileService } = await import('../../services/userService.js');
 
 describe('User Controller', () => {
     let req, res, next;
@@ -37,6 +44,7 @@ describe('User Controller', () => {
             json: jest.fn(),
         };
         next = jest.fn();
+        process.env.SERVER_NAME = 'testServer';
         jest.clearAllMocks();
     });
 
@@ -70,13 +78,13 @@ describe('User Controller', () => {
 
     describe('getUserProfile', () => {
         it('should return a user profile if found', async () => {
-            req.params.federatedId = '123';
-            const mockUser = { federatedId: '123', displayName: 'User1' };
-            User.findOne.mockResolvedValue(mockUser);
+            req.params.federatedId = '123@testServer';
+            const mockUser = { federatedId: '123@testServer', displayName: 'User1' };
+            getUserProfileService.mockResolvedValue(mockUser);
 
             await getUserProfile(req, res, next);
 
-            expect(User.findOne).toHaveBeenCalledWith({ federatedId: '123' });
+            expect(getUserProfileService).toHaveBeenCalledWith('123@testServer');
             expect(res.status).toHaveBeenCalledWith(200);
             expect(res.json).toHaveBeenCalledWith({
                 success: true,
@@ -85,20 +93,19 @@ describe('User Controller', () => {
         });
 
         it('should call next with error if user not found', async () => {
-            req.params.federatedId = '999';
-            User.findOne.mockResolvedValue(null);
+            req.params.federatedId = '999@testServer';
+            getUserProfileService.mockRejectedValue(new Error('User not found'));
 
             await getUserProfile(req, res, next);
 
-            expect(User.findOne).toHaveBeenCalledWith({ federatedId: '999' });
+            expect(getUserProfileService).toHaveBeenCalledWith('999@testServer');
             expect(next).toHaveBeenCalledWith(expect.any(Error));
-            // Verify error properties if possible, but expecting Error is good enough for now
         });
 
         it('should handle errors during findOne', async () => {
-            req.params.federatedId = '123';
+            req.params.federatedId = '123@testServer';
             const error = new Error('Database error');
-            User.findOne.mockRejectedValue(error);
+            getUserProfileService.mockRejectedValue(error);
 
             await getUserProfile(req, res, next);
 

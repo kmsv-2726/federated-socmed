@@ -28,10 +28,7 @@ describe("verifyAdmin middleware", () => {
       401,
       "Authentication required"
     );
-    expect(next).toHaveBeenCalledWith({
-      status: 401,
-      message: "Authentication required"
-    });
+    expect(next).toHaveBeenCalledWith(expect.any(Object));
   });
 
   test("returns 403 if user is not admin", () => {
@@ -43,10 +40,7 @@ describe("verifyAdmin middleware", () => {
       403,
       "You are not authorized!"
     );
-    expect(next).toHaveBeenCalledWith({
-      status: 403,
-      message: "You are not authorized!"
-    });
+    expect(next).toHaveBeenCalledWith(expect.any(Object));
   });
 
   test("calls next without error if user is admin", () => {

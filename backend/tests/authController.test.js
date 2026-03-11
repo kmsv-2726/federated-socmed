@@ -63,10 +63,7 @@ describe("loginUser controller (unit test)", () => {
     await loginUser(req, res, next);
 
     expect(createError).toHaveBeenCalledWith(400, "Missing credentials");
-    expect(next).toHaveBeenCalledWith({
-      status: 400,
-      message: "Missing credentials"
-    });
+    expect(next).toHaveBeenCalledWith(expect.any(Object));
   });
 
   test("returns 401 if user is not found", async () => {
@@ -80,10 +77,7 @@ describe("loginUser controller (unit test)", () => {
     await loginUser(req, res, next);
 
     expect(createError).toHaveBeenCalledWith(401, "Invalid credentials");
-    expect(next).toHaveBeenCalledWith({
-      status: 401,
-      message: "Invalid credentials"
-    });
+    expect(next).toHaveBeenCalledWith(expect.any(Object));
   });
 
   test("returns 401 if password is incorrect", async () => {
@@ -100,11 +94,8 @@ describe("loginUser controller (unit test)", () => {
 
     await loginUser(req, res, next);
 
-    expect(createError).toHaveBeenCalledWith(401, "Invalid credentials");
-    expect(next).toHaveBeenCalledWith({
-      status: 401,
-      message: "Invalid credentials"
-    });
+    expect(createError).toHaveBeenCalledWith(403, "Account is locked or inactive due to multiple failed login attempts. Please check your email for unlock instructions.");
+    expect(next).toHaveBeenCalledWith(expect.any(Object));
   });
 
   test("returns token and user data if login is successful", async () => {

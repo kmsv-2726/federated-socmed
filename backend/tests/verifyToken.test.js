@@ -55,21 +55,25 @@ describe("verifyToken middleware", () => {
     req.headers.authorization = "Bearer validtoken";
 
     jwt.verify.mockReturnValue({
+      id: "mongo123",
       federatedId: "123",
       displayName: "Test User",
       serverName: "TestServer",
-      image: "img.png",
-      role: "user"
+      email: "test@example.com",
+      role: "user",
+      image: "img.png"
     });
 
     verifyToken(req, res, next);
 
     expect(req.user).toEqual({
+      id: "mongo123",
       federatedId: "123",
       displayName: "Test User",
-      server: "TestServer",
-      image: "img.png",
-      role: "user"
+      serverName: "TestServer",
+      email: "test@example.com",
+      role: "user",
+      image: "img.png"
     });
 
     expect(next).toHaveBeenCalled();
