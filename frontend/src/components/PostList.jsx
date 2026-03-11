@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiThumbsUp, FiMessageCircle, FiRepeat, FiMoreHorizontal, FiTrash2, FiSend, FiChevronUp, FiChevronDown } from 'react-icons/fi';
+import { FiThumbsUp, FiMessageCircle, FiRepeat, FiMoreHorizontal, FiTrash2, FiSend, FiChevronUp, FiChevronDown, FiVolumeX } from 'react-icons/fi';
 
 const API_BASE_URL = "http://localhost:5000/api";
 
