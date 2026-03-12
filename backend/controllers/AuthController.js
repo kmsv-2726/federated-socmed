@@ -21,6 +21,10 @@ export const loginUser = async (req, res, next) => {
       return next(createError(401, "Invalid credentials"));
     }
 
+    if (user.isSuspended) {
+      return next(createError(403, "Account suspended"));
+    }
+
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) {
       return next(createError(401, "Invalid credentials"));

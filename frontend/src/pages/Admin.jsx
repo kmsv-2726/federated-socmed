@@ -4,7 +4,8 @@ import axios from 'axios';
 import {
   FiShield, FiBarChart2, FiUsers, FiTv, FiMessageCircle,
   FiSlash, FiLock, FiServer, FiFileText, FiTrendingUp,
-  FiHome, FiLogOut, FiTrash2, FiEdit, FiArrowUp, FiArrowDown
+  FiHome, FiLogOut, FiTrash2, FiEdit, FiArrowUp, FiArrowDown,
+  FiAlertTriangle, FiUser, FiX, FiCheckCircle
 } from 'react-icons/fi';
 import ImageCropperModal from '../components/ImageCropperModal';
 import '../styles/Admin.css';
@@ -62,6 +63,15 @@ const Admin = () => {
   });
 
   const [globalFederationEnabled, setGlobalFederationEnabled] = useState(true);
+
+  // Report detail modal
+  const [reportDetailOpen, setReportDetailOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [reportTargetData, setReportTargetData] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
+
+  // Suspended users
+  const [suspendedUsers, setSuspendedUsers] = useState([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -143,6 +153,13 @@ const Admin = () => {
 
     fetchData();
   }, []);
+
+  // Auto-fetch suspended users when switching to blocked tab
+  useEffect(() => {
+    if (activeTab === 'blocked') {
+      fetchSuspendedUsers();
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -364,6 +381,115 @@ const Admin = () => {
     } catch (err) {
       console.error("Error updating report:", err);
       alert("Failed to update report status");
+    }
+  };
+
+  const openReportDetail = async (report) => {
+    setSelectedReport(report);
+    setReportTargetData(null);
+    setReportDetailOpen(true);
+    setReportLoading(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+
+      if (report.targetType === 'post') {
+        // Fetch all posts and find the one matching the reportedId
+        const res = await axios.get(`${API_BASE_URL}/posts`, config);
+        const posts = res.data.posts || [];
+        const post = posts.find(p => p.federatedId === report.reportedId);
+        setReportTargetData(post || null);
+      } else if (report.targetType === 'user') {
+        const encoded = encodeURIComponent(report.reportedId);
+        const res = await axios.get(`${API_BASE_URL}/user/${encoded}`, config);
+        setReportTargetData(res.data.user || res.data || null);
+      }
+    } catch (err) {
+      console.error('Error fetching report target:', err);
+      setReportTargetData(null);
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const handleResolvePost = async () => {
+    if (!selectedReport) return;
+    if (!window.confirm('Are you sure you want to remove this post? The author will be notified via email.')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE_URL}/reports/${selectedReport._id}/resolve-post`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setReportsList(prev => prev.map(r => r._id === selectedReport._id ? { ...r, status: 'resolved' } : r));
+      setStats(prev => ({ ...prev, reports: Math.max(0, prev.reports - 1) }));
+      setReportDetailOpen(false);
+      alert('Post removed and report resolved. Author has been notified via email.');
+    } catch (err) {
+      console.error('Error resolving post report:', err);
+      alert(err.response?.data?.message || 'Failed to resolve report');
+    }
+  };
+
+  const handleSuspendUser = async () => {
+    if (!selectedReport) return;
+    if (!window.confirm('Are you sure you want to suspend this user? They will be logged out and notified via email.')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE_URL}/reports/${selectedReport._id}/resolve-user`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setReportsList(prev => prev.map(r => r._id === selectedReport._id ? { ...r, status: 'resolved' } : r));
+      setStats(prev => ({ ...prev, reports: Math.max(0, prev.reports - 1) }));
+      setReportDetailOpen(false);
+      alert('User suspended and report resolved. User has been notified via email.');
+    } catch (err) {
+      console.error('Error resolving user report:', err);
+      alert(err.response?.data?.message || 'Failed to resolve report');
+    }
+  };
+
+  const handleDismissReport = async () => {
+    if (!selectedReport) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE_URL}/reports/${selectedReport._id}/status`, { status: 'dismissed' }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setReportsList(prev => prev.map(r => r._id === selectedReport._id ? { ...r, status: 'dismissed' } : r));
+      setStats(prev => ({ ...prev, reports: Math.max(0, prev.reports - 1) }));
+      setReportDetailOpen(false);
+      alert('Report dismissed.');
+    } catch (err) {
+      console.error('Error dismissing report:', err);
+      alert('Failed to dismiss report');
+    }
+  };
+
+  const fetchSuspendedUsers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/user/suspended`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuspendedUsers(res.data.users || []);
+    } catch (err) {
+      console.error('Error fetching suspended users:', err);
+    }
+  };
+
+  const handleUnsuspend = async (federatedId) => {
+    if (!window.confirm('Are you sure you want to unsuspend this user?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE_URL}/user/${encodeURIComponent(federatedId)}/unsuspend`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuspendedUsers(prev => prev.filter(u => u.federatedId !== federatedId));
+      alert('User unsuspended successfully.');
+    } catch (err) {
+      console.error('Error unsuspending user:', err);
+      alert('Failed to unsuspend user.');
     }
   };
 
@@ -688,7 +814,7 @@ const Admin = () => {
                         <td>{formatTimeAgo(report.createdAt)}</td>
                         <td>
                           <button className="action-btn-sm" onClick={() => reviewReport(report._id, 'dismiss')}>Dismiss</button>
-                          <button className="action-btn-sm" style={{ marginLeft: '5px', color: 'green', borderColor: 'green' }} onClick={() => reviewReport(report._id, 'resolve')}>Resolve</button>
+                          <button className="action-btn-sm" style={{ marginLeft: '5px', color: 'green', borderColor: 'green' }} onClick={() => openReportDetail(report)}>Resolve</button>
                         </td>
                       </tr>
                     ))}
@@ -926,7 +1052,7 @@ const Admin = () => {
                         {report.status === 'pending' && (
                           <>
                             <button className="action-btn-sm" onClick={() => reviewReport(report._id, 'dismiss')}>Dismiss</button>
-                            <button className="action-btn-sm" style={{ marginLeft: '5px', color: 'green', borderColor: 'green' }} onClick={() => reviewReport(report._id, 'resolve')}>Resolve</button>
+                            <button className="action-btn-sm" style={{ marginLeft: '5px', color: 'green', borderColor: 'green' }} onClick={() => openReportDetail(report)}>Resolve</button>
                           </>
                         )}
                         {report.status !== 'pending' && <span style={{ color: '#6b7280', fontSize: '0.8em' }}>Archived</span>}
@@ -1035,11 +1161,61 @@ const Admin = () => {
             </>
           )}
 
-          {/* ===== BLOCKED / SECURITY TAB ===== */}
+          {/* ===== BLOCKED / SUSPENDED ACCOUNTS TAB ===== */}
           {(activeTab === 'blocked' || activeTab === 'security') && (
             <div className="admin-section">
-              <h2>{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Settings</h2>
-              <p>Coming soon...</p>
+              <div className="section-header">
+                <h2 className="section-h2">Suspended Accounts</h2>
+                <button className="action-btn-sm" onClick={fetchSuspendedUsers}>Refresh</button>
+              </div>
+              {suspendedUsers.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9ca3af' }}>
+                  <FiSlash size={40} style={{ marginBottom: '12px', opacity: 0.4 }} />
+                  <p style={{ fontSize: '16px', fontWeight: '600' }}>No suspended accounts</p>
+                  <p style={{ fontSize: '14px', marginTop: '4px' }}>Suspended users will appear here.</p>
+                </div>
+              ) : (
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Avatar</th>
+                      <th>Display Name</th>
+                      <th>Federated ID</th>
+                      <th>Email</th>
+                      <th>Suspended Since</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {suspendedUsers.map(user => (
+                      <tr key={user._id || user.federatedId}>
+                        <td>
+                          {user.avatarUrl ? (
+                            <img src={user.avatarUrl} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
+                          ) : (
+                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <FiUser size={16} color="#ef4444" />
+                            </div>
+                          )}
+                        </td>
+                        <td>{user.displayName}</td>
+                        <td style={{ fontSize: '13px', color: '#6b7280' }}>{user.federatedId}</td>
+                        <td>{user.email || 'N/A'}</td>
+                        <td>{formatTimeAgo(user.updatedAt)}</td>
+                        <td>
+                          <button
+                            className="action-btn-sm"
+                            style={{ color: '#10b981', borderColor: '#10b981' }}
+                            onClick={() => handleUnsuspend(user.federatedId)}
+                          >
+                            <FiCheckCircle size={14} style={{ marginRight: '4px' }} /> Unsuspend
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           )}
 
@@ -1248,6 +1424,137 @@ const Admin = () => {
                 <button type="submit" className="primary-btn" style={{ backgroundColor: '#5865f2' }}>Add Server</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Report Detail Modal */}
+      {reportDetailOpen && selectedReport && (
+        <div className="modal-overlay" onClick={() => setReportDetailOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <FiAlertTriangle color="#f59e0b" />
+                Report Details
+              </h2>
+              <button onClick={() => setReportDetailOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
+                <FiX size={20} />
+              </button>
+            </div>
+
+            {/* Report Info */}
+            <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '14px' }}>
+                <div>
+                  <span style={{ color: '#64748b', fontSize: '12px', textTransform: 'uppercase', fontWeight: '600' }}>Type</span>
+                  <p style={{ margin: '4px 0 0', fontWeight: '600', color: selectedReport.targetType === 'post' ? '#7c3aed' : '#dc2626' }}>
+                    {selectedReport.targetType === 'post' ? 'Post Report' : 'User Report'}
+                  </p>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b', fontSize: '12px', textTransform: 'uppercase', fontWeight: '600' }}>Reason</span>
+                  <p style={{ margin: '4px 0 0', fontWeight: '500' }}>{selectedReport.reason?.replace('_', ' ')}</p>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b', fontSize: '12px', textTransform: 'uppercase', fontWeight: '600' }}>Reported By</span>
+                  <p style={{ margin: '4px 0 0', fontSize: '13px' }}>{selectedReport.reporterId}</p>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b', fontSize: '12px', textTransform: 'uppercase', fontWeight: '600' }}>Date</span>
+                  <p style={{ margin: '4px 0 0', fontSize: '13px' }}>{formatTimeAgo(selectedReport.createdAt)}</p>
+                </div>
+              </div>
+              {selectedReport.description && (
+                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e2e8f0' }}>
+                  <span style={{ color: '#64748b', fontSize: '12px', textTransform: 'uppercase', fontWeight: '600' }}>Description</span>
+                  <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#334155' }}>{selectedReport.description}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Target Content */}
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '14px', color: '#64748b', textTransform: 'uppercase', fontWeight: '600', marginBottom: '12px' }}>
+                {selectedReport.targetType === 'post' ? 'Reported Post' : 'Reported User'}
+              </h3>
+
+              {reportLoading ? (
+                <p style={{ color: '#9ca3af', textAlign: 'center', padding: '20px' }}>Loading...</p>
+              ) : !reportTargetData ? (
+                <p style={{ color: '#ef4444', textAlign: 'center', padding: '20px' }}>
+                  {selectedReport.targetType === 'post' ? 'Post not found or already deleted.' : 'User not found.'}
+                </p>
+              ) : selectedReport.targetType === 'post' ? (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <FiUser size={16} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '600', fontSize: '14px' }}>{reportTargetData.userDisplayName || 'Unknown'}</div>
+                      <div style={{ fontSize: '12px', color: '#9ca3af' }}>{reportTargetData.authorFederatedId || reportTargetData.federatedId}</div>
+                    </div>
+                  </div>
+                  <div style={{ background: '#f8fafc', borderRadius: '6px', padding: '12px', fontSize: '14px', lineHeight: '1.6', color: '#334155' }}>
+                    {reportTargetData.description || reportTargetData.content || 'No content'}
+                  </div>
+                  {reportTargetData.isChannelPost && reportTargetData.channelName && (
+                    <div style={{ marginTop: '8px', fontSize: '12px', color: '#6366f1' }}>
+                      Posted in #{reportTargetData.channelName}
+                    </div>
+                  )}
+                  <div style={{ marginTop: '8px', fontSize: '12px', color: '#9ca3af' }}>
+                    Posted {formatTimeAgo(reportTargetData.createdAt)}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {reportTargetData.avatarUrl ? (
+                        <img src={reportTargetData.avatarUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                      ) : (
+                        <FiUser size={20} color="#ef4444" />
+                      )}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '600', fontSize: '16px' }}>{reportTargetData.displayName}</div>
+                      <div style={{ fontSize: '13px', color: '#6b7280' }}>{reportTargetData.federatedId}</div>
+                      {reportTargetData.email && <div style={{ fontSize: '13px', color: '#9ca3af' }}>{reportTargetData.email}</div>}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="modal-actions" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                className="action-btn-sm"
+                onClick={handleDismissReport}
+                style={{ padding: '10px 20px' }}
+              >
+                Dismiss Report
+              </button>
+              {selectedReport.targetType === 'post' && reportTargetData && (
+                <button
+                  className="primary-btn"
+                  onClick={handleResolvePost}
+                  style={{ backgroundColor: '#ef4444', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <FiTrash2 size={14} /> Remove Post
+                </button>
+              )}
+              {selectedReport.targetType === 'user' && reportTargetData && (
+                <button
+                  className="primary-btn"
+                  onClick={handleSuspendUser}
+                  style={{ backgroundColor: '#ef4444', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <FiSlash size={14} /> Suspend Account
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

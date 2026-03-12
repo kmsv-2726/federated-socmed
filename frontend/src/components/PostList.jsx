@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiThumbsUp, FiMessageCircle, FiRepeat, FiMoreHorizontal, FiTrash2, FiSend, FiChevronUp, FiChevronDown, FiVolumeX } from 'react-icons/fi';
+import { FiThumbsUp, FiMessageCircle, FiRepeat, FiMoreHorizontal, FiTrash2, FiSend, FiChevronUp, FiChevronDown, FiVolumeX, FiFlag } from 'react-icons/fi';
 
 import { getApiBaseUrl } from '../config/api';
 
@@ -15,6 +15,10 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onRepostSuccess
   const [localComments, setLocalComments] = useState({});   // { postId: [comment, ...] }
   const [localLikes, setLocalLikes] = useState({});         // { postId: { count, liked, loading } }
   const [repostLoading, setRepostLoading] = useState({});   // { postId: bool }
+  const [reportModalPost, setReportModalPost] = useState(null);
+  const [reportReason, setReportReason] = useState('');
+  const [reportDescription, setReportDescription] = useState('');
+  const [reportLoading, setReportLoading] = useState(false);
   const menuRef = useRef(null);
   const navigate = useNavigate();
 
@@ -403,6 +407,18 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onRepostSuccess
                           <FiVolumeX /> Mute User
                         </button>
                       )}
+                      {!isActuallyOwnPost(post) && (
+                        <button
+                          className="dropdown-item"
+                          onClick={() => {
+                            setReportModalPost(post);
+                            setOpenMenuId(null);
+                          }}
+                          style={{ color: '#ef4444' }}
+                        >
+                          <FiFlag /> Report Post
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -526,6 +542,87 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onRepostSuccess
           </div>
         );
       })}
+
+      {/* Report Post Modal */}
+      {reportModalPost && (
+        <div className="modal-overlay" onClick={() => setReportModalPost(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: '12px', padding: '24px', maxWidth: '450px', width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <h3 style={{ margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FiFlag color="#ef4444" /> Report Post
+            </h3>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontWeight: '600', fontSize: '14px', marginBottom: '8px' }}>Reason *</label>
+              <select
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none' }}
+              >
+                <option value="">Select a reason...</option>
+                <option value="spam">Spam</option>
+                <option value="harassment">Harassment</option>
+                <option value="hate_speech">Hate Speech</option>
+                <option value="violence">Violence</option>
+                <option value="nudity">Nudity</option>
+                <option value="misinformation">Misinformation</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontWeight: '600', fontSize: '14px', marginBottom: '8px' }}>Additional Details</label>
+              <textarea
+                value={reportDescription}
+                onChange={(e) => setReportDescription(e.target.value)}
+                placeholder="Provide any additional context..."
+                rows={3}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setReportModalPost(null); setReportReason(''); setReportDescription(''); }}
+                style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid #e5e7eb', background: 'white', cursor: 'pointer', fontSize: '14px' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!reportReason) { alert('Please select a reason.'); return; }
+                  setReportLoading(true);
+                  try {
+                    const token = localStorage.getItem('token');
+                    const res = await fetch(`${API_BASE_URL}/reports`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                      body: JSON.stringify({
+                        reportedId: reportModalPost.federatedId,
+                        targetType: 'post',
+                        reason: reportReason,
+                        description: reportDescription
+                      })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      alert('Report submitted successfully. Our admin team will review it.');
+                      setReportModalPost(null); setReportReason(''); setReportDescription('');
+                    } else {
+                      alert(data.message || 'Failed to submit report.');
+                    }
+                  } catch (err) {
+                    console.error('Error reporting post:', err);
+                    alert('Failed to submit report.');
+                  } finally {
+                    setReportLoading(false);
+                  }
+                }}
+                disabled={reportLoading || !reportReason}
+                style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: '#ef4444', color: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: '600', opacity: reportLoading || !reportReason ? 0.5 : 1 }}
+              >
+                {reportLoading ? 'Submitting...' : 'Submit Report'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

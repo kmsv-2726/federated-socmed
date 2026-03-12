@@ -1,7 +1,10 @@
 import Report from "../models/Report.js";
+import Post from "../models/Post.js";
+import User from "../models/User.js";
 import { createError } from "../utils/error.js";
 import { sendFederationEvent } from "../services/federationService.js";
 import { createReportService } from "../services/reportService.js";
+import { sendPostRemovedEmail, sendAccountSuspendedEmail } from "../services/emailService.js";
 
 //remote Forwarding required to be implemented
 
@@ -122,3 +125,75 @@ export const updateReportStatus = async (req, res, next) => {
   }
 }
 
+export const resolvePostReport = async (req, res, next) => {
+  try {
+    const { reportId } = req.params;
+
+    const report = await Report.findById(reportId);
+    if (!report) return next(createError(404, "Report not found"));
+    if (report.targetType !== "post") return next(createError(400, "Report is not a post report"));
+
+    // Find the post by federatedId (reportedId stores the post's federatedId)
+    const post = await Post.findOne({ federatedId: report.reportedId });
+
+    if (post) {
+      // Find post author to email them
+      const author = await User.findOne({ federatedId: post.authorFederatedId || post.federatedId?.split("/")[0] });
+
+      // Delete the post
+      await Post.findByIdAndDelete(post._id);
+
+      // Send notification email (async, don't block)
+      if (author?.email) {
+        sendPostRemovedEmail(author.email, post.description || post.content || '', report.reason).catch(() => {});
+      }
+    }
+
+    // Mark report as resolved
+    report.status = "resolved";
+    await report.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Post removed and report resolved",
+      report
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const resolveUserReport = async (req, res, next) => {
+  try {
+    const { reportId } = req.params;
+
+    const report = await Report.findById(reportId);
+    if (!report) return next(createError(404, "Report not found"));
+    if (report.targetType !== "user") return next(createError(400, "Report is not a user report"));
+
+    // Find and suspend the user
+    const user = await User.findOne({ federatedId: report.reportedId });
+    if (!user) return next(createError(404, "Reported user not found"));
+
+    user.isSuspended = true;
+    user.tokenVersion += 1; // Invalidate all active sessions
+    await user.save();
+
+    // Send notification email
+    if (user.email) {
+      sendAccountSuspendedEmail(user.email, report.reason).catch(() => {});
+    }
+
+    // Mark report as resolved
+    report.status = "resolved";
+    await report.save();
+
+    res.status(200).json({
+      success: true,
+      message: "User suspended and report resolved",
+      report
+    });
+  } catch (err) {
+    next(err);
+  }
+};
