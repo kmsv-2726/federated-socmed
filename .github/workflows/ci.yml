@@ -1,0 +1,47 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: |
+          backend/package-lock.json
+          backend-sports/package-lock.json
+          frontend/package-lock.json
+
+    - name: Install Main Backend Dependencies
+      working-directory: ./backend
+      run: npm ci
+
+    - name: Install Sports Backend Dependencies
+      working-directory: ./backend-sports
+      run: npm ci
+
+    - name: Install Frontend Dependencies
+      working-directory: ./frontend
+      run: npm ci
+
+    - name: Build Frontend
+      working-directory: ./frontend
+      run: npm run build
+      env:
+        CI: false # Prevent treating warnings as errors during React builds
