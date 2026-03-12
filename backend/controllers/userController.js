@@ -488,3 +488,37 @@ export const searchUsers = async (req, res, next) => {
   }
 };
 
+export const getSuspendedUsers = async (req, res, next) => {
+  try {
+    const users = await User.find(
+      { isSuspended: true },
+      { displayName: 1, avatarUrl: 1, federatedId: 1, email: 1, isSuspended: 1, updatedAt: 1 }
+    );
+
+    res.status(200).json({
+      success: true,
+      users
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const unsuspendUser = async (req, res, next) => {
+  try {
+    const { federatedId } = req.params;
+
+    const user = await User.findOne({ federatedId: decodeURIComponent(federatedId) });
+    if (!user) return next(createError(404, "User not found"));
+
+    user.isSuspended = false;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "User unsuspended successfully"
+    });
+  } catch (err) {
+    next(err);
+  }
+};

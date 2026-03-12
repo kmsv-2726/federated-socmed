@@ -73,6 +73,10 @@ export const loginUser = async (req, res, next) => {
       return next(createError(403, "Account is locked or inactive due to multiple failed login attempts. Please check your email for unlock instructions."));
     }
 
+    if (user.isSuspended) {
+      return next(createError(403, "Account suspended"));
+    }
+
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) {
       user.failedLoginAttempts += 1;

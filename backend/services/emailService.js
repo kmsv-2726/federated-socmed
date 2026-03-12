@@ -47,3 +47,70 @@ export const sendUnlockEmail = async (recipientEmail, unlockToken) => {
         throw err;
     }
 };
+
+export const sendPostRemovedEmail = async (recipientEmail, postContent, reason) => {
+    const mailOptions = {
+        from: "federatedsocialnetwork@gmail.com",
+        to: recipientEmail,
+        subject: "Content Moderation: Your Post Has Been Removed",
+        html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+        <div style="background-color: #f59e0b; padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">Post Removed</h1>
+        </div>
+        <div style="padding: 30px; background-color: #ffffff;">
+          <p style="font-size: 16px; color: #334155; line-height: 1.5;">Hello,</p>
+          <p style="font-size: 16px; color: #334155; line-height: 1.5;">Your post has been removed by an administrator for violating our community guidelines.</p>
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 20px 0;">
+            <p style="margin: 0 0 8px 0; font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: 600;">Reason</p>
+            <p style="margin: 0; font-size: 14px; color: #334155;">${reason || 'Community guidelines violation'}</p>
+          </div>
+          ${postContent ? `
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 20px 0;">
+            <p style="margin: 0 0 8px 0; font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: 600;">Removed Post</p>
+            <p style="margin: 0; font-size: 14px; color: #334155;">${postContent.substring(0, 200)}${postContent.length > 200 ? '...' : ''}</p>
+          </div>` : ''}
+          <p style="font-size: 14px; color: #64748b; line-height: 1.5;">If you believe this was a mistake, please contact our support team.</p>
+        </div>
+      </div>
+    `
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`[EmailService] Post removed email sent to ${recipientEmail}`);
+    } catch (err) {
+        console.error(`[EmailService] Error sending post removed email:`, err);
+    }
+};
+
+export const sendAccountSuspendedEmail = async (recipientEmail, reason) => {
+    const mailOptions = {
+        from: "federatedsocialnetwork@gmail.com",
+        to: recipientEmail,
+        subject: "Account Suspended: Action Required",
+        html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+        <div style="background-color: #ef4444; padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">Account Suspended</h1>
+        </div>
+        <div style="padding: 30px; background-color: #ffffff;">
+          <p style="font-size: 16px; color: #334155; line-height: 1.5;">Hello,</p>
+          <p style="font-size: 16px; color: #334155; line-height: 1.5;">Your account has been suspended by an administrator due to reports of community guideline violations.</p>
+          <div style="background: #fef2f2; border: 1px solid #fee2e2; border-radius: 6px; padding: 16px; margin: 20px 0;">
+            <p style="margin: 0 0 8px 0; font-size: 12px; color: #991b1b; text-transform: uppercase; font-weight: 600;">Reason</p>
+            <p style="margin: 0; font-size: 14px; color: #334155;">${reason || 'Multiple community guideline violations'}</p>
+          </div>
+          <p style="font-size: 14px; color: #64748b; line-height: 1.5;">While suspended, you will not be able to log in or interact with the platform. If you believe this was a mistake, please contact our support team for an appeal.</p>
+        </div>
+      </div>
+    `
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`[EmailService] Account suspended email sent to ${recipientEmail}`);
+    } catch (err) {
+        console.error(`[EmailService] Error sending account suspended email:`, err);
+    }
+};

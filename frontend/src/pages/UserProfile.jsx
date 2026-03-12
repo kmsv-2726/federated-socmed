@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import PostList from '../components/PostList';
-import { FiMapPin, FiCalendar, FiArrowLeft, FiUserPlus, FiUserMinus, FiX, FiVolumeX, FiVolume2, FiUserX, FiSlash } from 'react-icons/fi';
+import { FiMapPin, FiCalendar, FiArrowLeft, FiUserPlus, FiUserMinus, FiX, FiVolumeX, FiVolume2, FiUserX, FiSlash, FiFlag } from 'react-icons/fi';
 import '../styles/Profile.css';
 
 import { getApiBaseUrl } from '../config/api';
@@ -30,6 +30,10 @@ function UserProfile() {
     const [muteLoading, setMuteLoading] = useState(false);
     const [isBlocked, setIsBlocked] = useState(false);
     const [blockLoading, setBlockLoading] = useState(false);
+    const [reportModalOpen, setReportModalOpen] = useState(false);
+    const [reportReason, setReportReason] = useState('');
+    const [reportDescription, setReportDescription] = useState('');
+    const [reportLoading, setReportLoading] = useState(false);
 
     const currentUser = (() => {
         const u = localStorage.getItem('user');
@@ -236,6 +240,44 @@ function UserProfile() {
         }
     };
 
+    const handleReportUser = async () => {
+        if (!reportReason) {
+            alert('Please select a reason for the report.');
+            return;
+        }
+        setReportLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/reports`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    reportedId: decodedId,
+                    targetType: 'user',
+                    reason: reportReason,
+                    description: reportDescription
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert('Report submitted successfully. Our admin team will review it.');
+                setReportModalOpen(false);
+                setReportReason('');
+                setReportDescription('');
+            } else {
+                alert(data.message || 'Failed to submit report.');
+            }
+        } catch (err) {
+            console.error('Error reporting user:', err);
+            alert('Failed to submit report.');
+        } finally {
+            setReportLoading(false);
+        }
+    };
+
     const handleLikePost = async (postFederatedId) => {
         try {
             const token = localStorage.getItem('token');
@@ -325,6 +367,13 @@ function UserProfile() {
                                             >
                                                 {isBlocked ? <><FiSlash /> Unblock</> : <><FiUserX /> Block</>}
                                             </button>
+                                            <button
+                                                className="follow-btn"
+                                                onClick={() => setReportModalOpen(true)}
+                                                style={{ color: '#ef4444', borderColor: '#ef4444' }}
+                                            >
+                                                <FiFlag /> Report
+                                            </button>
                                         </div>
                                     )}
                                 </div>
@@ -407,6 +456,64 @@ function UserProfile() {
                                     ))}
                                 </ul>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Report User Modal */}
+            {reportModalOpen && (
+                <div className="modal-overlay" onClick={() => setReportModalOpen(false)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '450px' }}>
+                        <div className="modal-header">
+                            <h3><FiFlag style={{ marginRight: '8px' }} /> Report {userProfile?.displayName}</h3>
+                            <button className="modal-close" onClick={() => setReportModalOpen(false)}>
+                                <FiX />
+                            </button>
+                        </div>
+                        <div className="modal-body" style={{ padding: '20px' }}>
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', fontWeight: '600', fontSize: '14px', marginBottom: '8px' }}>Reason *</label>
+                                <select
+                                    value={reportReason}
+                                    onChange={(e) => setReportReason(e.target.value)}
+                                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none' }}
+                                >
+                                    <option value="">Select a reason...</option>
+                                    <option value="spam">Spam</option>
+                                    <option value="harassment">Harassment</option>
+                                    <option value="hate_speech">Hate Speech</option>
+                                    <option value="violence">Violence</option>
+                                    <option value="nudity">Nudity</option>
+                                    <option value="misinformation">Misinformation</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{ display: 'block', fontWeight: '600', fontSize: '14px', marginBottom: '8px' }}>Additional Details</label>
+                                <textarea
+                                    value={reportDescription}
+                                    onChange={(e) => setReportDescription(e.target.value)}
+                                    placeholder="Provide any additional context..."
+                                    rows={3}
+                                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                                />
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                                <button
+                                    onClick={() => setReportModalOpen(false)}
+                                    style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid #e5e7eb', background: 'white', cursor: 'pointer', fontSize: '14px' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleReportUser}
+                                    disabled={reportLoading || !reportReason}
+                                    style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: '#ef4444', color: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: '600', opacity: reportLoading || !reportReason ? 0.5 : 1 }}
+                                >
+                                    {reportLoading ? 'Submitting...' : 'Submit Report'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

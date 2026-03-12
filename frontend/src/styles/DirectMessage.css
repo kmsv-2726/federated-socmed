@@ -55,21 +55,32 @@
 }
 
 .dm-search {
-    padding: 12px;
+    padding: 14px 16px;
     border-bottom: 1px solid #e2e8f0;
 }
 
 .dm-search input {
     width: 100%;
-    padding: 8px 12px;
+    padding: 10px 14px;
     border: 1px solid #cbd5e1;
-    border-radius: 6px;
+    border-radius: 8px;
     outline: none;
+    font-size: 0.9rem;
+    box-sizing: border-box;
 }
 
 .dm-contacts {
     flex-grow: 1;
     overflow-y: auto;
+    padding: 8px 0;
+    padding-left: 20px;
+}
+
+.no-contacts {
+    padding: 20px 16px;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.9rem;
 }
 
 .contact-item {
@@ -112,11 +123,12 @@
 }
 
 .chat-header {
-    padding: 20px 24px;
+    padding: 16px 20px;
     border-bottom: 1px solid #e2e8f0;
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
+    background: #f8f9fa;
 }
 
 .server-tag {
@@ -129,11 +141,11 @@
 
 .chat-messages {
     flex-grow: 1;
-    padding: 24px;
+    padding: 20px 24px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
 }
 
 .message-bubble {
@@ -160,10 +172,11 @@
 }
 
 .chat-input-area {
-    padding: 20px 24px;
+    padding: 16px 20px;
     border-top: 1px solid #e2e8f0;
     display: flex;
-    gap: 12px;
+    gap: 10px;
+    align-items: center;
     background: #f8f9fa;
 }
 
@@ -225,11 +238,12 @@
 }
 
 .search-user-item {
-    padding: 8px 12px;
+    padding: 10px 14px;
     display: flex;
     align-items: center;
     gap: 10px;
     cursor: pointer;
+    transition: background 0.15s;
 }
 
 .search-user-item:hover {

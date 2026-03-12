@@ -340,7 +340,16 @@ const AuthPage = () => {
               onChange={handleLoginChange}
               required
             />
-            {error && !isSignUp && <ErrorMessage>{error}</ErrorMessage>}
+            {error && !isSignUp && (
+              error === "Account suspended" ? (
+                <div style={{ marginTop: '15px', padding: '15px', backgroundColor: '#fee2e2', border: '1px solid #ef4444', borderRadius: '8px', textAlign: 'center' }}>
+                  <p style={{ color: '#b91c1c', fontWeight: 'bold', margin: '0 0 10px 0' }}>Account Suspended</p>
+                  <p style={{ color: '#7f1d1d', fontSize: '13px', margin: 0 }}>Your account has been suspended by an administrator.</p>
+                </div>
+              ) : (
+                <ErrorMessage>{error}</ErrorMessage>
+              )
+            )}
             {success && !isSignUp && <SuccessMessage>{success}</SuccessMessage>}
             <Button
               type="submit"
