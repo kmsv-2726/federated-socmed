@@ -25,7 +25,7 @@ const app = express()
 const httpServer = createServer(app)
 export const io = new Server(httpServer, {
   cors: {
-    origin: ["http://localhost:5173", "http://localhost:3000", "https://food-api-3hzj.onrender.com"],
+    origin: ["http://localhost:5173", "http://localhost:3000", "https://heartfelt-cocada-80540c.netlify.app"],
     credentials: true
   }
 })
