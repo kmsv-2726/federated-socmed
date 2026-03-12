@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { FiSearch, FiX, FiUserCheck, FiUserPlus, FiGlobe, FiHome as FiLocal, FiAlertCircle, FiFlag } from 'react-icons/fi';
 import '../styles/SearchUsers.css';
 
-const API_BASE_URL = "http://localhost:5000/api";
+import { getApiBaseUrl } from '../config/api';
+
+const API_BASE_URL = getApiBaseUrl();
 
 const SearchUsers = () => {
     const [query, setQuery] = useState('');

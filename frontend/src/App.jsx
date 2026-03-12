@@ -84,8 +84,6 @@ function App() {
                     <SearchPage />
                 </ProtectedRoute>
             } />
-            <Route path="/landing" element={<LandingPage />} />
-            <Route path="/servers" element={<ServerHome />} />
             <Route path="/admin" element={
                 <ProtectedRoute>
                     <Admin />

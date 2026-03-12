@@ -13,7 +13,9 @@ import {
 } from 'react-icons/fi';
 import axios from 'axios';
 
-const API_BASE_URL = "http://localhost:5000/api";
+import { getApiBaseUrl } from '../config/api';
+
+const API_BASE_URL = getApiBaseUrl();
 
 const SidebarLeft = () => {
   const navigate = useNavigate();

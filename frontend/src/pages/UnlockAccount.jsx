@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import '../styles/app.css';
+import { getApiBaseUrl } from '../config/api';
+
+const API_BASE_URL = getApiBaseUrl();
 
 const UnlockAccount = () => {
     const [searchParams] = useSearchParams();
@@ -19,7 +22,7 @@ const UnlockAccount = () => {
 
         const unlock = async () => {
             try {
-                const response = await axios.get(`http://localhost:5000/api/auth/unlock?token=${token}`);
+                const response = await axios.get(`${API_BASE_URL}/auth/unlock?token=${token}`);
                 if (response.data.success) {
                     setStatus('success');
                     setMessage(response.data.message || 'Your account has been successfully unlocked!');

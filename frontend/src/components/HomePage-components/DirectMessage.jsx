@@ -8,7 +8,7 @@ import '../../styles/DirectMessage.css';
 import { getApiBaseUrl } from '../../config/api';
 
 const API_BASE_URL = getApiBaseUrl();
-const SOCKET_URL = (import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace("/api", "") : "http://localhost:5000");
+const SOCKET_URL = getApiBaseUrl().replace("/api", "");
 
 const DirectMessage = ({ onClose, initialTargetUser = null }) => {
     const navigate = useNavigate();
@@ -126,7 +126,7 @@ const DirectMessage = ({ onClose, initialTargetUser = null }) => {
 
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get(`${API_BASE_URL}/user?search=${query}`, {
+            const res = await axios.get(`${API_BASE_URL}/user/search?q=${query}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (res.data.success) {

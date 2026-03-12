@@ -33,7 +33,8 @@ export const loginUser = async (req, res, next) => {
         serverName: user.serverName,
         federatedId: user.federatedId,
         displayName: user.displayName,
-        image: user.avatarUrl
+        image: user.avatarUrl,
+        tokenVersion: user.tokenVersion || 0
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
@@ -111,7 +112,8 @@ export const registerUser = async (req, res, next) => {
         serverName: newUser.serverName,
         federatedId: newUser.federatedId,
         displayName: newUser.displayName,
-        image: null
+        image: null,
+        tokenVersion: newUser.tokenVersion || 0
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }

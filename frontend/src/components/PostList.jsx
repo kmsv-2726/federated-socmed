@@ -373,42 +373,41 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onRepostSuccess
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="post-header-right">
-              {(post.isRemote || (currentUser && post.originServer !== currentUser.serverName)) && (
-                <div className="remote-tag">
-                  {post.isChannelPost
-                    ? `${post.channelName}@${post.originServer}`
-                    : post.authorFederatedId}
-                </div>
-              )}
-              <div className="post-menu-container" ref={openMenuId === post._id ? menuRef : null}>
-
-                <button className="post-menu" onClick={() => toggleMenu(post._id)}>
-                  <FiMoreHorizontal />
-                </button>
-                {openMenuId === post._id && (
-                  <div className="post-dropdown-menu">
-                    {isOwnPost(post) && (
-                      <button
-                        className="dropdown-item delete-item"
-                        onClick={() => handleDelete(post._id)}
-                      >
-                        <FiTrash2 /> Delete Post
-                      </button>
-                    )}
-                    {!isActuallyOwnPost(post) && (
-                      <button
-                        className="dropdown-item"
-                        onClick={() => handleMute(post)}
-                      >
-                        <FiVolumeX /> Mute User
-                      </button>
-                    )}
+              <div className="post-header-right">
+                {(post.isRemote || (currentUser && post.originServer !== currentUser.serverName)) && (
+                  <div className="remote-tag">
+                    {post.isChannelPost
+                      ? `${post.channelName}@${post.originServer}`
+                      : post.authorFederatedId}
                   </div>
                 )}
+                <div className="post-menu-container" ref={openMenuId === post._id ? menuRef : null}>
+                  <button className="post-menu" onClick={() => toggleMenu(post._id)}>
+                    <FiMoreHorizontal />
+                  </button>
+                  {openMenuId === post._id && (
+                    <div className="post-dropdown-menu">
+                      {isOwnPost(post) && (
+                        <button
+                          className="dropdown-item delete-item"
+                          onClick={() => handleDelete(post._id)}
+                        >
+                          <FiTrash2 /> Delete Post
+                        </button>
+                      )}
+                      {!isActuallyOwnPost(post) && (
+                        <button
+                          className="dropdown-item"
+                          onClick={() => handleMute(post)}
+                        >
+                          <FiVolumeX /> Mute User
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
 
             {/* ── Content ── */}
             <div className="post-content">{post.description || post.content}</div>
