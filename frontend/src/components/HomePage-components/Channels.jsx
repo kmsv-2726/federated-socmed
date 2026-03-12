@@ -95,9 +95,10 @@ function Channels() {
         }
 
         base.forEach(channel => {
-          checkFollowStatus(channel.name);
+          const channelKey = channel.federatedId || channel.name;
+          checkFollowStatus(channelKey);
           if (channel.visibility === 'private') {
-            checkRequestStatus(channel.name);
+            checkRequestStatus(channelKey);
           }
         });
       }
@@ -130,14 +131,10 @@ function Channels() {
     inputRef.current?.focus();
   };
 
-  useEffect(() => {
-    fetchChannels();
-  }, [fetchChannels]);
-
   const handleRequestAccess = async (channelName) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`${API_BASE_URL}/channels/request-access/${channelName}`, {}, {
+      await axios.post(`${API_BASE_URL}/channels/request-access/${encodeURIComponent(channelName)}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setRequestStatuses(prev => ({ ...prev, [channelName]: 'pending' }));
@@ -147,20 +144,20 @@ function Channels() {
     }
   };
 
-  const handleFollow = async (channelName) => {
+  const handleFollow = async (channelIdentifier) => {
     try {
       const token = localStorage.getItem('token');
-      const isFollowing = followingChannels[channelName];
+      const isFollowing = followingChannels[channelIdentifier];
       if (isFollowing) {
-        await axios.delete(`${API_BASE_URL}/channels/unfollow/${channelName}`, {
+        await axios.delete(`${API_BASE_URL}/channels/unfollow/${encodeURIComponent(channelIdentifier)}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
       } else {
-        await axios.post(`${API_BASE_URL}/channels/follow/${channelName}`, {}, {
+        await axios.post(`${API_BASE_URL}/channels/follow/${encodeURIComponent(channelIdentifier)}`, {}, {
           headers: { Authorization: `Bearer ${token}` }
         });
       }
-      setFollowingChannels(prev => ({ ...prev, [channelName]: !isFollowing }));
+      setFollowingChannels(prev => ({ ...prev, [channelIdentifier]: !isFollowing }));
       fetchChannels(query);
     } catch (err) {
       console.error(err);
@@ -185,16 +182,21 @@ function Channels() {
     </Layout>
   );
 
+  // For federated queries like "recipes@sports", the backend already filtered by
+  // federatedId — only strip the "@server" part for client-side text matching,
+  // otherwise "recipes".includes("recipes@sports") is always false.
+  const localFilterQuery = query.includes('@') ? query.split('@')[0] : query;
+
   const filtered = channels
     .filter(c => {
       const t = (c.name + ' ' + (c.description || '')).toLowerCase();
-      return t.includes(query.toLowerCase());
+      return t.includes(localFilterQuery.toLowerCase());
     })
     .filter(c => {
       if (activeFilter === 'public') return c.visibility === 'public';
       if (activeFilter === 'private') return c.visibility === 'private';
       if (activeFilter === 'read-only') return c.visibility === 'read-only';
-      if (activeFilter === 'joined') return !!followingChannels[c.name];
+      if (activeFilter === 'joined') return !!followingChannels[c.federatedId || c.name];
       return true;
     });
 
@@ -262,12 +264,13 @@ function Channels() {
 
         <div className="channels-grid">
           {filtered.map(channel => {
-            const reqStatus = requestStatuses[channel.name] || 'none';
-            const isFollowing = !!followingChannels[channel.name];
+            const channelKey = channel.federatedId || channel.name;
+            const reqStatus = requestStatuses[channelKey] || 'none';
+            const isFollowing = !!followingChannels[channelKey];
 
             return (
               <div key={channel._id} className={`channel-card ${channel.visibility === 'private' ? 'private' : ''}`}>
-                <Link to={`/channels/${encodeURIComponent(channel.name)}`} className="channel-card-link">
+                <Link to={`/channels/${encodeURIComponent(channel.federatedId || channel.name)}`} className="channel-card-link">
                   {channel.image ? (
                     <div className="channel-banner">
                       <img src={channel.image} alt={channel.name} />
@@ -294,7 +297,7 @@ function Channels() {
                     ) : (
                       <button
                         className={reqStatus === 'pending' ? 'btn-following' : 'btn-request'}
-                        onClick={() => (reqStatus === 'none' || reqStatus === 'rejected') && handleRequestAccess(channel.name)}
+                        onClick={() => (reqStatus === 'none' || reqStatus === 'rejected') && handleRequestAccess(channel.federatedId || channel.name)}
                         disabled={reqStatus === 'pending'}
                         title={reqStatus === 'rejected' ? 'Your previous request was rejected. Click to request again.' : ''}
                       >
@@ -304,7 +307,7 @@ function Channels() {
                   ) : (
                     <button
                       className={isFollowing ? 'btn-following' : 'btn-join'}
-                      onClick={() => handleFollow(channel.name)}
+                      onClick={() => handleFollow(channel.federatedId || channel.name)}
                     >
                       {isFollowing
                         ? (channel.visibility === 'read-only' ? 'Following' : 'Joined')

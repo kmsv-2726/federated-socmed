@@ -499,9 +499,9 @@ const Admin = () => {
       return;
     }
 
-    const submissionData = { 
+    const submissionData = {
       serverName: serverFormData.name.trim(),
-      url: serverFormData.url.trim()
+      serverUrl: serverFormData.url.trim()
     };
 
     try {
