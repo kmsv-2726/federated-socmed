@@ -20,8 +20,7 @@ const Admin = () => {
   const [stats, setStats] = useState({
     users: 0,
     posts: 0,
-    reports: 0,
-    engagement: 0
+    reports: 0
   });
 
   const [usersList, setUsersList] = useState([]);
@@ -142,7 +141,7 @@ const Admin = () => {
 
       } catch (err) {
         console.warn("Backend unavailable or error fetching data.");
-        setStats({ users: 0, posts: 0, reports: 0, engagement: 0 });
+        setStats({ users: 0, posts: 0, reports: 0 });
         setUsersList([]);
         setChannelsList([]);
         setReportsList([]);
@@ -164,8 +163,7 @@ const Admin = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       setStats(prev => ({
-        ...prev,
-        engagement: Math.floor(Math.random() * 20) + 50
+        ...prev
       }));
     }, 5000);
     return () => clearInterval(interval);
@@ -740,17 +738,6 @@ const Admin = () => {
                   </div>
                 </div>
 
-                <div className="stat-card">
-                  <div className="stat-header">
-                    <FiTrendingUp size={18} />
-                    <span>Engagement Rate</span>
-                  </div>
-                  <div className="stat-value">{stats.engagement}%</div>
-                  <div className="stat-trend trend-up">
-                    <FiArrowUp size={14} />
-                    <span>Estimated</span>
-                  </div>
-                </div>
               </div>
 
               {/* Recent Activity Table */}
