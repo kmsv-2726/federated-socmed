@@ -4,7 +4,7 @@ import { sendFederationEvent } from "../services/federationService.js";
 import { createReportService } from "../services/reportService.js";
 
 //remote Forwarding required to be implemented
-    
+
 export const createReport = async (req, res, next) => {
   try {
     const reporterId = req.user.federatedId;
@@ -19,6 +19,23 @@ export const createReport = async (req, res, next) => {
 
     const isRemoteTarget = originServer !== process.env.SERVER_NAME;
 
+    if (isRemoteTarget) {
+      const response = await sendFederationEvent({
+        type: "REPORT",
+        actorFederatedId: reporterId,
+        objectFederatedId: reportedId,
+        data: {
+          targetType,
+          reason,
+          description
+        }
+      });
+
+      if (response && (response.queued || response.skipped)) {
+        return next(createError(502, "Remote server is offline or unreachable. Report failed."));
+      }
+    }
+
     const savedReport = await createReportService({
       reporterId,
       reportedId,
@@ -28,26 +45,6 @@ export const createReport = async (req, res, next) => {
       targetOriginServer: originServer,
       isRemoteTarget
     });
-
-
-    if (isRemoteTarget) {
-      try {
-        await sendFederationEvent({
-          type: "REPORT",
-          actorFederatedId: reporterId,
-          objectFederatedId: reportedId,
-          data: {
-            targetType,
-            reason,
-            description
-          }
-        });
-      } catch (err) {
-        console.error("Federation report failed:", err.message);
-      }
-    }
-
-
 
     return res.status(201).json({
       success: true,
@@ -61,47 +58,47 @@ export const createReport = async (req, res, next) => {
 };
 
 export const getAllReports = async (req, res, next) => {
-    try {
-        const { status, targetType, limit } = req.query;
+  try {
+    const { status, targetType, limit } = req.query;
 
-        const filter = {};
-        if (status) filter.status = status;
-        if (targetType) filter.targetType = targetType;
+    const filter = {};
+    if (status) filter.status = status;
+    if (targetType) filter.targetType = targetType;
 
-        const reports = await Report.find(filter)
-        .sort({ createdAt: -1 })
-        .limit(Number(limit) || 20); // default = 20
+    const reports = await Report.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(Number(limit) || 20); // default = 20
 
-        res.status(200).json({
-            success: true,
-            count: reports.length,
-            reports
-        });
-    }catch(err){
-        next(err);
-    }
+    res.status(200).json({
+      success: true,
+      count: reports.length,
+      reports
+    });
+  } catch (err) {
+    next(err);
+  }
 }
 
 
 
 export const updateReportStatus = async (req, res, next) => {
-    try {
-        const { reportId } = req.params;
-        const { status } = req.body;
-        if (!["pending", "resolved", "dismissed"].includes(status)) {
-            return next(createError(400, "Invalid status value"));
-        }
-        const updatedReport = await Report.findByIdAndUpdate(
-            reportId,
-            { status: status },
-            { new: true }
-        );
-        if (!updatedReport) {
-            return next(createError(404, "Report not found"));
-        }
-        res.status(200).json(updatedReport);
-    }catch(err){
-        next(err);
+  try {
+    const { reportId } = req.params;
+    const { status } = req.body;
+    if (!["pending", "resolved", "dismissed"].includes(status)) {
+      return next(createError(400, "Invalid status value"));
     }
+    const updatedReport = await Report.findByIdAndUpdate(
+      reportId,
+      { status: status },
+      { new: true }
+    );
+    if (!updatedReport) {
+      return next(createError(404, "Report not found"));
+    }
+    res.status(200).json(updatedReport);
+  } catch (err) {
+    next(err);
+  }
 }
 

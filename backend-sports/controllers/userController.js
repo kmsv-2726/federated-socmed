@@ -98,20 +98,25 @@ export const followUser = async (req, res, next) => {
     const { targetOriginServer, isRemote } = resolveFollowTarget(targetFederatedId);
 
     if (isRemote) {
-      // 1. Write local record so THIS server knows userA follows userB@remote
-      await followUserService(
-        userId,
-        targetFederatedId,
-        req.user.serverName,
-        targetOriginServer
-      );
-
-      // 2. Notify the remote server
-      await sendFederationEvent({
+      // 1. Notify the remote server FIRST
+      const response = await sendFederationEvent({
         type: "FOLLOW_USER",
         actorFederatedId: userId,
         objectFederatedId: targetFederatedId
       });
+
+      if (response && (response.queued || response.skipped)) {
+        return next(createError(502, "Remote server is offline or unreachable. Follow failed."));
+      }
+
+      // 2. Write local record ONLY if federation succeeded
+      await followUserService(
+        userId,
+        targetFederatedId,
+        req.user.serverName,
+        targetOriginServer,
+        true
+      );
 
       return res.status(200).json({
         success: true,

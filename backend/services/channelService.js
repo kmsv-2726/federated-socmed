@@ -10,7 +10,7 @@ import { createError } from "../utils/error.js";
   - Controller
   - Federation Inbox
 */
-export const followChannelService = async (actorFederatedId, channel) => {
+export const followChannelService = async (actorFederatedId, channel, isRemote = false) => {
 
   const existingFollow = await ChannelFollow.findOne({
     userFederatedId: actorFederatedId,
@@ -27,7 +27,8 @@ export const followChannelService = async (actorFederatedId, channel) => {
     channelName: channel.name,
     serverName: channel.serverName,
     userOriginServer: actorFederatedId.split("@")[1],
-    channelOriginServer: channel.originServer
+    channelOriginServer: channel.originServer,
+    isRemote
   });
 
   channel.followersCount += 1;

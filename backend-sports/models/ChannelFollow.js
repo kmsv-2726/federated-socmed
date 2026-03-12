@@ -30,6 +30,11 @@ const channelFollowSchema = new mongoose.Schema(
     channelOriginServer: {
       type: String,
       required: true
+    },
+
+    isRemote: {
+      type: Boolean,
+      default: false
     }
   },
   { timestamps: true }

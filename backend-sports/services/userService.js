@@ -8,7 +8,7 @@ import { createError } from "../utils/error.js";
  * - REST followUser controller
  * - Federation inbox FOLLOW event
  */
-export const followUserService = async (followerFederatedId, followingFederatedId, followerOriginServer, followingOriginServer) => {
+export const followUserService = async (followerFederatedId, followingFederatedId, followerOriginServer, followingOriginServer, isRemote = false) => {
 
   if (followerFederatedId === followingFederatedId) {
     throw createError(400, "You cannot follow yourself");
@@ -28,7 +28,8 @@ export const followUserService = async (followerFederatedId, followingFederatedI
     followingFederatedId,
     serverName: followerOriginServer,
     followerOriginServer,
-    followingOriginServer
+    followingOriginServer,
+    isRemote
   });
 
   await newFollow.save();
@@ -97,3 +98,21 @@ export const getUserProfileService = async (federatedId) => {
   if (!user) throw createError(404, "User not found");
   return user;
 };
+
+/**
+ * Shared service for searching users using regex.
+ * Used by userController (local search) and federationFeedController (remote search).
+ */
+export const searchUsersService = async (query) => {
+  // Extract all users with regex and limit it to 5
+  return await User.find(
+    {
+      $or: [
+        { displayName: { $regex: query, $options: "i" } },
+        { federatedId: { $regex: query, $options: "i" } }
+      ]
+    },
+    { displayName: 1, avatarUrl: 1, federatedId: 1, followersCount: 1, followingCount: 1 }
+  ).limit(5);
+};
+

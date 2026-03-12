@@ -16,6 +16,7 @@ import messageRoute from "./routes/messageRoute.js"
 import ServerConfig from "./models/ServerConfig.js"
 import muteRoute from "./routes/muteRoute.js"
 import blockRoute from "./routes/blockRoute.js"
+import searchRoute from "./routes/searchRoute.js"
 
 dotenv.config()
 
@@ -69,6 +70,7 @@ app.use("/api/server-config", serverConfigRoute)
 app.use("/api/messages", messageRoute)
 app.use("/api/mutes", muteRoute)
 app.use("/api/blocks", blockRoute)
+app.use("/api/search", searchRoute)
 
 app.use((err, req, res, next) => {
   const errorStatus = err.status || 500

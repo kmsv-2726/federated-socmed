@@ -295,7 +295,8 @@ export const followChannel = async (req, res, next) => {
       channelName: name,
       serverName: req.user.serverName,
       userOriginServer: req.user.serverName,
-      channelOriginServer: targetServer
+      channelOriginServer: targetServer,
+      isRemote: true
     });
 
     return res.status(200).json({
