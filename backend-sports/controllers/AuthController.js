@@ -1,4 +1,5 @@
 import User from "../models/User.js";
+import ActivityLog from "../models/ActivityLog.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { createError } from "../utils/error.js";
@@ -50,7 +51,7 @@ export const loginUser = async (req, res, next) => {
       return next(createError(400, "Missing credentials"));
     }
 
-    console.log(`[Auth-Sports] Login attempt for identifier: "${identifier}" on server: "${process.env.SERVER_NAME}"`);
+    console.log(`[Auth] Login attempt for identifier: "${identifier}" on server: "${process.env.SERVER_NAME}"`);
 
     const user = await User.findOne({
       serverName: process.env.SERVER_NAME,
@@ -62,11 +63,11 @@ export const loginUser = async (req, res, next) => {
     });
 
     if (!user) {
-      console.warn(`[Auth-Sports] User not found for identifier: "${identifier}"`);
+      console.warn(`[Auth] User not found for identifier: "${identifier}"`);
       return next(createError(401, "Invalid credentials"));
     }
 
-    console.log(`[Auth-Sports] Found user: "${user.displayName}". Active: ${user.isActive}. Failed attempts: ${user.failedLoginAttempts}`);
+    console.log(`[Auth] Found user: "${user.displayName}". Active: ${user.isActive}. Failed attempts: ${user.failedLoginAttempts}`);
 
     if (!user.isActive) {
       return next(createError(403, "Account is locked or inactive due to multiple failed login attempts. Please check your email for unlock instructions."));
@@ -118,6 +119,13 @@ export const loginUser = async (req, res, next) => {
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
 
+    await ActivityLog.create({
+      userId: user._id,
+      username: user.displayName,
+      federatedId: user.federatedId,
+      action: "LOGIN"
+    });
+
     res.status(200).json({
       success: true,
       token,
@@ -138,7 +146,8 @@ export const loginUser = async (req, res, next) => {
 
 export const registerUser = async (req, res, next) => {
   try {
-    const { displayName, firstName, lastName, dob, email, password } = req.body;
+    const {
+      displayName, firstName, lastName, dob, email, password } = req.body;
 
     if (
       !displayName || !firstName || !lastName || !dob || !email || !password
@@ -146,19 +155,18 @@ export const registerUser = async (req, res, next) => {
       return next(createError(400, "All required fields must be provided"));
     }
 
-    // Strip out all whitespace from displayName ONLY for federatedId generation
-    const sanitizedDisplayName = displayName.replace(/\s+/g, '');
-    const federatedId = `${sanitizedDisplayName}@${process.env.SERVER_NAME}`;
-
     const existingUser = await User.findOne({
-      $or: [{ email }, { federatedId }]
+      serverName: process.env.SERVER_NAME,
+      $or: [{ email }, { displayName }]
     });
 
     if (existingUser) {
-      return next(createError(409, "User with this email, or display name already exists"));
+      return next(createError(409, "User already exists"));
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+
+    const federatedId = `${displayName}@${process.env.SERVER_NAME}`;
 
     const newUser = new User({
       displayName,
@@ -182,8 +190,7 @@ export const registerUser = async (req, res, next) => {
         serverName: newUser.serverName,
         federatedId: newUser.federatedId,
         displayName: newUser.displayName,
-        image: null,
-        tokenVersion: newUser.tokenVersion
+        image: null
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
@@ -206,4 +213,5 @@ export const registerUser = async (req, res, next) => {
     next(err);
   }
 };
+
 

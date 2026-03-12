@@ -8,8 +8,7 @@ import {
   FiServer,
   FiLogOut,
   FiShield,
-  FiHelpCircle,
-  FiSearch
+  FiHelpCircle
 } from 'react-icons/fi';
 import axios from 'axios';
 
@@ -58,12 +57,6 @@ const SidebarLeft = () => {
           <FiHome className="icon" /> Home
         </button>
 
-        <button
-          className={`nav-item ${isActive('/search') ? 'active' : ''}`}
-          onClick={() => handleNavClick('/search')}
-        >
-          <FiSearch className="icon" /> Search
-        </button>
         <button
           className={`nav-item ${isActive('/profile') ? 'active' : ''}`}
           onClick={() => handleNavClick('/profile')}

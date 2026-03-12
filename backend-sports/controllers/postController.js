@@ -435,6 +435,7 @@ export const getPostsUsers = async (req, res, next) => {
     }
 
     // ── Parse server from federatedId: "username@serverName" ─────────────────
+    // User federatedId format: "username@serverName"
     const atIndex     = authorFederatedId.lastIndexOf("@");
     const targetServer = atIndex !== -1
       ? authorFederatedId.slice(atIndex + 1).toLowerCase()

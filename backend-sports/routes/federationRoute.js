@@ -23,7 +23,12 @@ router.get("/feed", verifyFederatedServer, federationFeed);
 // Trusted Server Management (Admin Only)
 router.post("/trusted-servers", verifyToken, verifyAdmin, addTrustedServer);
 router.get("/trusted-servers", verifyToken, verifyAdmin, getTrustedServers);
-router.patch("/trusted-servers/:id/toggle", verifyToken, verifyAdmin, toggleTrustedServer);
+router.put("/trusted-servers/:id/toggle", verifyToken, verifyAdmin, toggleTrustedServer);
 router.delete("/trusted-servers/:id", verifyToken, verifyAdmin, removeTrustedServer);
+
+import { getFederationStatus, toggleFederationStatus } from '../controllers/federationController.js';
+router.get("/status", verifyToken, verifyAdmin, getFederationStatus);
+router.put("/status", verifyToken, verifyAdmin, toggleFederationStatus);
+
 
 export default router;   
