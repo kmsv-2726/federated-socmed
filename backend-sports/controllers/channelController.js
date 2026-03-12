@@ -1,6 +1,7 @@
 import { createError } from "../utils/error.js";
 import Channel from "../models/Channel.js";
 import ChannelFollow from "../models/ChannelFollow.js";
+import ChannelRequest from "../models/ChannelRequest.js";
 import TrustedServer from "../models/TrustedServer.js";
 import axios from "axios";
 import {
@@ -110,30 +111,60 @@ export const getChannel = async (req, res, next) => {
     // ── Federated Search/View (Requires '@') ─────────────────────────────────
     const { isLocal, targetServer } = resolveChannelTarget(searchInput);
 
-    // ── 1. Local Channel ─────────────────────────────────────────────────────
+    // ── 1. Local Channel by Federated ID ─────────────────────────────────────
     if (isLocal) {
-      const channel = await getChannelProfileService(searchInput);
-      return res.status(200).json({ success: true, channels: channel });
+      const channels = await Channel.find({
+        federatedId: searchInput
+      }).limit(1);
+
+      return res.status(200).json({ success: true, channels });
     }
 
     // ── 2. Remote Channel (Federated Search/View) ────────────────────────────
+    if (!targetServer || targetServer.trim() === "") {
+      return res.status(200).json({ success: true, channels: [] });
+    }
+
     const trusted = await TrustedServer.findOne({ serverName: targetServer, isActive: true });
     if (!trusted) {
-      return next(createError(403, `Server ${targetServer} is not trusted or offline`));
+      // If it's a search for an unknown server, just return empty instead of breaking the UI
+      return res.status(200).json({ success: true, channels: [] });
     }
 
     try {
+      // First attempt a search to get a list (unified behavior)
       const { data } = await axios.get(
-        `${trusted.serverUrl}/api/federation/feed?type=GET_CHANNEL&federatedId=${searchInput}`,
+        `${trusted.serverUrl}/api/federation/feed?type=SEARCH_CHANNELS&query=${encodeURIComponent(searchInput)}`,
         {
           headers: { "x-origin-server": process.env.SERVER_NAME },
           timeout: 5000
         }
       );
-      // The frontend expects the result in a "channels" key (legacy naming)
-      return res.status(200).json({ success: true, channels: data.channel });
+      
+      if (data.success && data.channels && data.channels.length > 0) {
+        return res.status(200).json({ success: true, channels: data.channels });
+      }
+
+      // Fallback to GET_CHANNEL if search yields nothing but it might be a direct hit
+      const profileRes = await axios.get(
+        `${trusted.serverUrl}/api/federation/feed?type=GET_CHANNEL&federatedId=${encodeURIComponent(searchInput)}`,
+        {
+          headers: { "x-origin-server": process.env.SERVER_NAME },
+          timeout: 5000
+        }
+      );
+      
+      return res.status(200).json({ 
+        success: true, 
+        channels: profileRes.data.channel ? [profileRes.data.channel] : [] 
+      });
+
     } catch (error) {
-      return next(createError(502, "Failed to fetch remote channel profile"));
+      // If remote server is unreachable or fails, return empty instead of 502
+      return res.status(200).json({ 
+        success: true, 
+        channels: [] 
+      });
     }
 
   } catch (err) {
@@ -252,6 +283,10 @@ export const followChannel = async (req, res, next) => {
         return next(createError(404, "Channel not found"));
       }
 
+      if (channel.visibility === 'private' && req.user.role !== 'admin' && channel.createdBy !== req.user.federatedId) {
+        return next(createError(403, "This channel is private. Please request access instead."));
+      }
+
       await followChannelService(req.user.federatedId, channel);
 
       return res.status(200).json({
@@ -368,19 +403,28 @@ export const unFollowChannel = async (req, res, next) => {
 
 export const checkFollowStatus = async (req, res, next) => {
   try {
-    const channelName = req.params.channelName;
-    const channel = await Channel.findOne({ name: channelName, serverName: req.user.serverName });
-    if (!channel) {
-      return next(createError(404, "Channel not found"));
+    const channelInput = req.params.channelName;
+    const { isLocal, name, targetServer } = resolveChannelTarget(channelInput);
+
+    let channelFederatedId;
+    if (isLocal) {
+      const channel = await Channel.findOne({ name, serverName: process.env.SERVER_NAME });
+      if (!channel) return next(createError(404, "Channel not found"));
+      channelFederatedId = channel.federatedId;
+    } else {
+      channelFederatedId = channelInput;
     }
+
     const userFederatedId = req.user.federatedId;
     const existingFollow = await ChannelFollow.findOne({
       userFederatedId,
-      channelFederatedId: channel.federatedId
+      channelFederatedId
     });
+
     res.status(200).json({
       success: true,
-      isFollowing: existingFollow !== null
+      isFollowing: existingFollow !== null && existingFollow.status === 'active',
+      status: existingFollow ? existingFollow.status : null
     });
   } catch (err) {
     next(err);
@@ -389,16 +433,341 @@ export const checkFollowStatus = async (req, res, next) => {
 
 export const getChannelFollowers = async (req, res, next) => {
   try {
-    const channelName = req.params.channelName;
-    const channel = await Channel.findOne({ name: channelName, serverName: req.user.serverName });
-    if (!channel) {
-      return next(createError(404, "Channel not found"));
+    const channelInput = req.params.channelName;
+    const { isLocal, name } = resolveChannelTarget(channelInput);
+
+    let channelFederatedId;
+    if (isLocal) {
+      const channel = await Channel.findOne({ name, serverName: process.env.SERVER_NAME });
+      if (!channel) return next(createError(404, "Channel not found"));
+      channelFederatedId = channel.federatedId;
+    } else {
+      channelFederatedId = channelInput;
     }
-    const followers = await ChannelFollow.find({ channelFederatedId: channel.federatedId });
+
+    const followers = await ChannelFollow.find({ channelFederatedId, status: 'active' });
     res.status(200).json({
       success: true,
       followers
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
+// ── Private Channel Requests ────────────────────────────────────────────────
+
+export const requestChannelAccess = async (req, res, next) => {
+  try {
+    const channelInput = req.params.channelName;
+    const { isLocal, name, targetServer } = resolveChannelTarget(channelInput);
+
+    if (!isLocal) {
+      return next(createError(403, "Private channels must be local to this server."));
+    }
+
+    const channel = await Channel.findOne({ name, serverName: process.env.SERVER_NAME });
+    if (!channel) return next(createError(404, "Channel not found"));
+    if (channel.visibility !== 'private') {
+      return next(createError(400, "This channel is not private. Use join instead."));
+    }
+
+    const existingRequest = await ChannelFollow.findOne({
+      userFederatedId: req.user.federatedId,
+      channelFederatedId: channel.federatedId
+    });
+
+    if (existingRequest) {
+      return res.status(200).json({
+        success: true,
+        message: existingRequest.status === 'active' ? "Already a member" : "Request already pending",
+        status: existingRequest.status
+      });
+    }
+
+    const newRequest = new ChannelFollow({
+      userFederatedId: req.user.federatedId,
+      channelFederatedId: channel.federatedId,
+      channelName: channel.name,
+      serverName: process.env.SERVER_NAME,
+      userOriginServer: req.user.serverName,
+      channelOriginServer: process.env.SERVER_NAME,
+      isRemote: false,
+      status: 'pending'
+    });
+
+    await newRequest.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Access request sent successfully",
+      status: 'pending'
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getPendingRequests = async (req, res, next) => {
+  try {
+    const requests = await ChannelFollow.find({ status: 'pending' }).sort({ createdAt: -1 });
+    res.status(200).json({ success: true, requests });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const handleChannelRequest = async (req, res, next) => {
+  try {
+    const { requestId } = req.params;
+    const { action } = req.body; // 'approve' or 'reject'
+
+    const request = await ChannelFollow.findById(requestId);
+    if (!request) return next(createError(404, "Request not found"));
+
+    if (action === 'approve') {
+      request.status = 'active';
+      await request.save();
+
+      // Increment channel follower count
+      await Channel.findOneAndUpdate(
+        { federatedId: request.channelFederatedId },
+        { $inc: { followersCount: 1 } }
+      );
+
+      res.status(200).json({ success: true, message: "Request approved" });
+    } else {
+      await ChannelFollow.findByIdAndDelete(requestId);
+      res.status(200).json({ success: true, message: "Request rejected" });
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
+
+// --- Private Channel Access Requests (ChannelRequest-based) ---
+
+export const requestAccess = async (req, res, next) => {
+  try {
+    const channelInput = req.params.channelName;
+    const { isLocal, name } = resolveChannelTarget(channelInput);
+
+    if (!isLocal) {
+      return next(createError(400, "Federated access requests are not yet supported"));
+    }
+
+    const channel = await Channel.findOne({
+      name,
+      serverName: process.env.SERVER_NAME
+    });
+
+    if (!channel) {
+      return next(createError(404, "Channel not found"));
+    }
+
+    if (channel.visibility !== "private") {
+      return next(createError(400, "Access requests are only for private channels"));
+    }
+
+    // Check if user is already following
+    const existingFollow = await ChannelFollow.findOne({
+      userFederatedId: req.user.federatedId,
+      channelFederatedId: channel.federatedId
+    });
+
+    if (existingFollow) {
+      return next(createError(400, "You are already a member of this channel"));
+    }
+
+    // Check if request already exists
+    const existingRequest = await ChannelRequest.findOne({
+      channelFederatedId: channel.federatedId,
+      userFederatedId: req.user.federatedId
+    });
+
+    if (existingRequest) {
+      if (existingRequest.status === "pending") {
+        return next(createError(400, "You already have a pending request for this channel"));
+      } else if (existingRequest.status === "rejected") {
+        await ChannelRequest.deleteOne({ _id: existingRequest._id });
+      }
+    }
+
+    const createdReq = await ChannelRequest.create({
+      channelFederatedId: channel.federatedId,
+      channelName: channel.name,
+      userFederatedId: req.user.federatedId,
+      userDisplayName: req.user.displayName
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Access request submitted successfully"
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getChannelPendingRequests = async (req, res, next) => {
+  try {
+    const channelInput = req.params.channelName;
+    const { isLocal, name } = resolveChannelTarget(channelInput);
+
+    if (!isLocal) {
+      return next(createError(400, "Cannot fetch requests for remote channel"));
+    }
+
+    const channel = await Channel.findOne({
+      name,
+      serverName: process.env.SERVER_NAME
+    });
+
+    if (!channel) {
+      return next(createError(404, "Channel not found"));
+    }
+
+    if (channel.createdBy !== req.user.federatedId && req.user.role !== "admin") {
+      return next(createError(403, "Only the channel creator can view access requests"));
+    }
+
+    const requests = await ChannelRequest.find({
+      channelFederatedId: channel.federatedId,
+      status: "pending"
+    }).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      requests
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getAllPendingRequests = async (req, res, next) => {
+  try {
+    if (req.user.role !== "admin") {
+      return next(createError(403, "Only server admins can view all pending requests"));
+    }
+
+    const requests = await ChannelRequest.find({
+      status: "pending"
+    }).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      requests
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const checkRequestStatus = async (req, res, next) => {
+  try {
+    const channelInput = req.params.channelName;
+    const { isLocal, name } = resolveChannelTarget(channelInput);
+
+    if (!isLocal) {
+      return res.status(200).json({ success: true, status: "none" });
+    }
+
+    const channel = await Channel.findOne({ name, serverName: process.env.SERVER_NAME });
+    if (!channel) return next(createError(404, "Channel not found"));
+
+    const request = await ChannelRequest.findOne({
+      channelFederatedId: channel.federatedId,
+      userFederatedId: req.user.federatedId
+    });
+
+    res.status(200).json({
+      success: true,
+      status: request ? request.status : "none"
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const resolveAccessRequest = async (req, res, next) => {
+  try {
+    const channelInput = req.params.channelName;
+    const { isLocal, name } = resolveChannelTarget(channelInput);
+    const { userFederatedId, action } = req.body;
+
+    if (!userFederatedId || !["approve", "reject"].includes(action)) {
+      return next(createError(400, "Valid userFederatedId and action ('approve' or 'reject') are required"));
+    }
+
+    if (!isLocal) {
+      return next(createError(400, "Cannot resolve requests for remote channel"));
+    }
+
+    const channel = await Channel.findOne({
+      name,
+      serverName: process.env.SERVER_NAME
+    });
+
+    if (!channel) {
+      return next(createError(404, "Channel not found"));
+    }
+
+    if (channel.createdBy !== req.user.federatedId && req.user.role !== "admin") {
+      return next(createError(403, "Only the channel creator can resolve access requests"));
+    }
+
+    const targetRequest = await ChannelRequest.findOne({
+      channelFederatedId: channel.federatedId,
+      userFederatedId,
+      status: "pending"
+    });
+
+    if (!targetRequest) {
+      return next(createError(404, "Pending request not found"));
+    }
+
+    if (action === "approve") {
+      const existingFollow = await ChannelFollow.findOne({
+        userFederatedId,
+        channelFederatedId: channel.federatedId
+      });
+
+      if (!existingFollow) {
+        await ChannelFollow.create({
+          userFederatedId,
+          channelFederatedId: channel.federatedId,
+          channelName: channel.name,
+          serverName: channel.serverName,
+          userOriginServer: userFederatedId.split("@")[1] || process.env.SERVER_NAME,
+          channelOriginServer: channel.serverName
+        });
+
+        // Increment channel follower count
+        await Channel.findOneAndUpdate(
+          { federatedId: channel.federatedId },
+          { $inc: { followersCount: 1 } }
+        );
+      }
+
+      await ChannelRequest.deleteOne({ _id: targetRequest._id });
+
+    } else if (action === "reject") {
+      targetRequest.status = "rejected";
+      await targetRequest.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Request ${action}d successfully`
+    });
+
   } catch (err) {
     next(err);
   }

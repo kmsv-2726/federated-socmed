@@ -54,6 +54,7 @@ export const canPostInChannel = (user, channel, isFollowing) => {
 
     case VISIBILITY.PRIVATE:
       // Only people who have been accepted (isFollowing) can post in private channels
+      // Note: isFollowing should imply an 'active' status from the backend
       return isFollowing;
 
     default:

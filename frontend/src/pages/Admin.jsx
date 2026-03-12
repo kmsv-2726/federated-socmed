@@ -61,7 +61,10 @@ const Admin = () => {
     description: ''
   });
 
-  const [globalFederationEnabled, setGlobalFederationEnabled] = useState(true);
+  // Local Server Configuration
+  const [serverConfig, setServerConfig] = useState(null);
+  const [isEditingConfig, setIsEditingConfig] = useState(false);
+  const [configFormData, setConfigFormData] = useState({ description: '', rules: '' });
 
   // Report detail modal
   const [reportDetailOpen, setReportDetailOpen] = useState(false);
@@ -81,15 +84,16 @@ const Admin = () => {
           headers: { Authorization: `Bearer ${token}` }
         };
 
-        const [usersRes, postsRes, channelsRes, reportsRes, requestsRes, serversRes, federationRes, activitiesRes] = await Promise.allSettled([
+        const [usersRes, postsRes, channelsRes, reportsRes, requestsRes, serversRes, activitiesRes, adminRequestsRes, configRes] = await Promise.allSettled([
           axios.get(`${API_BASE_URL}/user`, config),
           axios.get(`${API_BASE_URL}/posts`, config),
           axios.get(`${API_BASE_URL}/channels`, config),
           axios.get(`${API_BASE_URL}/reports?limit=100`, config),
           axios.get(`${API_BASE_URL}/channels/all-requests`, config),
-          axios.get(`${API_BASE_URL}/servers`, config),
-          axios.get(`${API_BASE_URL}/federation/status`, config).catch(() => ({ data: { isEnabled: true } })),
-          axios.get(`${API_BASE_URL}/activities`, config).catch(() => ({ data: { activities: [] } }))
+          axios.get(`${API_BASE_URL}/federation/trusted-servers`, config),
+          axios.get(`${API_BASE_URL}/activities`, config).catch(() => ({ data: { activities: [] } })),
+          axios.get(`${API_BASE_URL}/channels/admin/requests`, config).catch(() => ({ data: { requests: [] } })),
+          axios.get(`${API_BASE_URL}/server-config`, config).catch(() => ({ data: { config: null } }))
         ]);
 
         let usedMock = false;
@@ -122,15 +126,22 @@ const Admin = () => {
         }
 
         if (serversRes.status === 'fulfilled') {
-          setServersList(serversRes.value.data.servers || []);
-        }
-
-        if (federationRes && federationRes.status === 'fulfilled' && federationRes.value.data) {
-          setGlobalFederationEnabled(federationRes.value.data.isEnabled !== false);
+          setServersList(serversRes.value.data.trustedServers || []);
         }
 
         if (activitiesRes && activitiesRes.status === 'fulfilled' && activitiesRes.value.data) {
           setActivitiesList(activitiesRes.value.data.activities || []);
+        }
+
+        // adminRequestsRes (ChannelFollow-based) intentionally NOT used to set pendingRequests.
+        // requestsRes (ChannelRequest-based, via /all-requests) is the correct source above.
+
+        if (configRes && configRes.status === 'fulfilled' && configRes.value.data && configRes.value.data.config) {
+          setServerConfig(configRes.value.data.config);
+          setConfigFormData({
+            description: configRes.value.data.config.description || '',
+            rules: configRes.value.data.config.rules || ''
+          });
         }
 
         if (usedMock || usersRes.status === 'rejected' || postsRes.status === 'rejected') {
@@ -169,17 +180,7 @@ const Admin = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        await axios.post(`${API_BASE_URL}/auth/logout`, {}, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-      }
-    } catch (err) {
-      console.error('Logout error:', err);
-    }
+  const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     navigate('/auth');
@@ -498,19 +499,19 @@ const Admin = () => {
       return;
     }
 
-    const submissionData = { ...serverFormData };
-    if (!submissionData.description || !submissionData.description.trim()) {
-      submissionData.description = "No description provided.";
-    }
+    const submissionData = {
+      serverName: serverFormData.name.trim(),
+      serverUrl: serverFormData.url.trim()
+    };
 
     try {
       const token = localStorage.getItem('token');
       const config = { headers: { Authorization: `Bearer ${token}` } };
 
-      const response = await axios.post(`${API_BASE_URL}/servers`, submissionData, config);
+      const response = await axios.post(`${API_BASE_URL}/federation/trusted-servers`, submissionData, config);
 
       if (response.data.success) {
-        setServersList(prev => [...prev, response.data.server]);
+        setServersList(prev => [...prev, response.data.trustedServer]);
         setServerModalOpen(false);
         setServerFormData({ name: '', url: '', category: 'general', description: '' });
         alert('Server added successfully!');
@@ -523,35 +524,62 @@ const Admin = () => {
   };
 
   const handleDeleteServer = async (serverId) => {
-    if (!window.confirm('Are you sure you want to delete this server connection?')) return;
+    if (!window.confirm('Are you sure you want to remove this trusted server?')) return;
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`${API_BASE_URL}/servers/${serverId}`, {
+      await axios.delete(`${API_BASE_URL}/federation/trusted-servers/${serverId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setServersList(prev => prev.filter(s => s._id !== serverId));
-      alert('Server deleted successfully.');
+      alert('Server removed successfully.');
     } catch (err) {
       console.error('Error deleting server:', err);
-      alert('Failed to delete server.');
+      alert('Failed to remove server.');
     }
   };
 
-  const handleGlobalFederationToggle = async () => {
+  const handleToggleServer = async (serverId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.put(`${API_BASE_URL}/federation/status`,
-        { isEnabled: !globalFederationEnabled },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (response.data && typeof response.data.isEnabled === 'boolean') {
-        setGlobalFederationEnabled(response.data.isEnabled);
-      } else {
-        setGlobalFederationEnabled(!globalFederationEnabled);
+      const response = await axios.put(`${API_BASE_URL}/federation/trusted-servers/${serverId}/toggle`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.data.success) {
+        setServersList(prev => prev.map(s => s._id === serverId ? { ...s, isActive: response.data.trustedServer.isActive } : s));
       }
     } catch (err) {
-      console.error('Error toggling federation:', err);
-      setGlobalFederationEnabled(!globalFederationEnabled);
+      console.error('Error toggling server:', err);
+      alert('Failed to toggle server status.');
+    }
+  };
+
+  const handleRequestAction = async (requestId, action) => {
+    try {
+      const token = localStorage.getItem('token');
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      await axios.post(`${API_BASE_URL}/channels/admin/requests/${requestId}/handle`, { action }, config);
+      
+      setPendingRequests(prev => prev.filter(r => r._id !== requestId));
+      alert(`Request ${action === 'approve' ? 'approved' : 'rejected'} successfully.`);
+    } catch (err) {
+      console.error('Error handling request:', err);
+      alert('Failed to process request.');
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.put(`${API_BASE_URL}/server-config`, configFormData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.data && response.data.success) {
+        setServerConfig(response.data.config);
+        setIsEditingConfig(false);
+      }
+    } catch (err) {
+      console.error('Error saving config:', err);
+      alert('Failed to save server configuration.');
     }
   };
 
@@ -739,6 +767,39 @@ const Admin = () => {
                 </div>
 
               </div>
+
+              {/* Trusted Servers Table */}
+              <section className="admin-section">
+                <div className="section-header">
+                  <h2 className="section-h2">Connected Federated Servers</h2>
+                  <button className="action-btn-sm" onClick={() => setActiveTab('server')}>Manage Servers</button>
+                </div>
+
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Server Name</th>
+                      <th>URL</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {serversList.slice(0, 5).map(server => (
+                      <tr key={server._id}>
+                        <td><strong>{server.serverName}</strong></td>
+                        <td>{server.serverUrl}</td>
+                        <td>
+                          <span className={`status-badge ${server.isActive ? 'status-active' : 'status-suspended'}`} 
+                                style={{ backgroundColor: server.isActive ? '#d1fae5' : '#fee2e2', color: server.isActive ? '#065f46' : '#991b1b' }}>
+                            {server.isActive ? 'Active' : 'Suspended'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {serversList.length === 0 && <tr><td colSpan="3">No federated servers connected.</td></tr>}
+                  </tbody>
+                </table>
+              </section>
 
               {/* Recent Activity Table */}
               <section className="admin-section">
@@ -1052,6 +1113,7 @@ const Admin = () => {
             </section>
           )}
 
+
           {/* ===== SERVER TAB ===== */}
           {activeTab === 'server' && (
             <>
@@ -1062,20 +1124,70 @@ const Admin = () => {
               <section className="admin-section">
                 <div className="section-header">
                   <h2 className="section-h2">Local Server Identity (This Node)</h2>
+                  {!isEditingConfig ? (
+                    <button className="action-btn-sm" onClick={() => setIsEditingConfig(true)}>Edit Configuration</button>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button className="action-btn-sm" onClick={() => setIsEditingConfig(false)}>Cancel</button>
+                      <button className="primary-btn" onClick={handleSaveConfig}>Save Changes</button>
+                    </div>
+                  )}
                 </div>
-                <div className="server-info-content">
-                  <h3 style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.05em' }}>Server Name</h3>
-                  <div style={{ fontSize: '18px', fontWeight: '600', color: '#111827', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <FiServer size={24} />
-                    <span>{(() => {
-                      try {
-                        const user = JSON.parse(localStorage.getItem('user'));
-                        return user?.serverName || 'Unknown Server';
-                      } catch {
-                        return 'Unknown Server';
-                      }
-                    })()}</span>
+                <div className="server-info-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  
+                  <div>
+                    <h3 style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.05em' }}>Server Name</h3>
+                    <div style={{ fontSize: '18px', fontWeight: '600', color: '#111827', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <FiServer size={24} />
+                      <span>{serverConfig?.serverName || (() => {
+                        try {
+                          const user = JSON.parse(localStorage.getItem('user'));
+                          return user?.serverName || 'Unknown Server';
+                        } catch {
+                          return 'Unknown Server';
+                        }
+                      })()}</span>
+                    </div>
                   </div>
+
+                  {isEditingConfig ? (
+                    <>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label>Description</label>
+                        <textarea 
+                          value={configFormData.description}
+                          onChange={(e) => setConfigFormData(prev => ({ ...prev, description: e.target.value }))}
+                          placeholder="What is this server about?"
+                          style={{ minHeight: '80px' }}
+                        />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label>Server Rules</label>
+                        <textarea 
+                          value={configFormData.rules}
+                          onChange={(e) => setConfigFormData(prev => ({ ...prev, rules: e.target.value }))}
+                          placeholder="List your server rules here..."
+                          style={{ minHeight: '120px' }}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <h3 style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.05em' }}>Description</h3>
+                        <div style={{ color: '#374151', whiteSpace: 'pre-wrap' }}>
+                          {serverConfig?.description || <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>No description provided.</span>}
+                        </div>
+                      </div>
+                      <div>
+                        <h3 style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.05em' }}>Server Rules</h3>
+                        <div style={{ color: '#374151', whiteSpace: 'pre-wrap' }}>
+                          {serverConfig?.rules || <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>No rules provided.</span>}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
                 </div>
               </section>
 
@@ -1088,36 +1200,40 @@ const Admin = () => {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Name</th>
+                      <th>Server Name</th>
                       <th>URL</th>
-                      <th>Category</th>
-                      <th>Description</th>
+                      <th>Status</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {serversList.map(server => (
                       <tr key={server._id}>
-                        <td><strong>{server.name}</strong></td>
-                        <td>{server.url}</td>
+                        <td><strong>{server.serverName}</strong></td>
+                        <td>{server.serverUrl}</td>
                         <td>
-                          <span className="status-badge" style={{ backgroundColor: '#f3f4f6', color: '#374151' }}>
-                            {server.category}
+                          <span className={`status-badge ${server.isActive ? 'status-active' : 'status-suspended'}`} 
+                                style={{ backgroundColor: server.isActive ? '#d1fae5' : '#fee2e2', color: server.isActive ? '#065f46' : '#991b1b' }}>
+                            {server.isActive ? 'Active' : 'Suspended'}
                           </span>
                         </td>
-                        <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {server.description}
-                        </td>
                         <td style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <button 
+                            className="action-btn-sm" 
+                            style={{ color: server.isActive ? '#d97706' : '#059669', borderColor: server.isActive ? '#fef3c7' : '#d1fae5' }} 
+                            onClick={() => handleToggleServer(server._id)}
+                          >
+                            {server.isActive ? 'Disable' : 'Enable'}
+                          </button>
                           <button className="action-btn-sm" style={{ color: '#ef4444', borderColor: '#fee2e2' }} onClick={() => handleDeleteServer(server._id)}>
-                            <FiTrash2 size={14} /> Delete
+                            <FiTrash2 size={14} /> Remove
                           </button>
                         </td>
                       </tr>
                     ))}
                     {serversList.length === 0 && (
                       <tr>
-                        <td colSpan="5" style={{ textAlign: 'center', padding: '24px', color: '#6b7280' }}>
+                        <td colSpan="4" style={{ textAlign: 'center', padding: '24px', color: '#6b7280' }}>
                           No remote servers connected. Add one to enable federation!
                         </td>
                       </tr>
@@ -1125,24 +1241,11 @@ const Admin = () => {
                   </tbody>
                 </table>
 
-                <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h3 style={{ margin: 0, color: '#374151', fontSize: '16px' }}>Network Federation</h3>
-                    <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>Toggle entire network federation dynamically</p>
-                  </div>
-                  <button
-                    className="primary-btn"
-                    onClick={handleGlobalFederationToggle}
-                    style={{
-                      backgroundColor: globalFederationEnabled ? '#10b981' : '#ef4444',
-                      minWidth: '150px',
-                      display: 'flex',
-                      justifyContent: 'center',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    {globalFederationEnabled ? 'FEDERATION: ON' : 'FEDERATION: OFF'}
-                  </button>
+                <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #e5e7eb' }}>
+                  <h3 style={{ margin: 0, color: '#374151', fontSize: '16px' }}>Network Federation</h3>
+                  <p style={{ margin: '4px 0 0 0', color: '#6b7280', fontSize: '14px' }}>
+                    Federation status is controlled via trusted server enable/disable actions.
+                  </p>
                 </div>
               </section>
             </>
@@ -1384,31 +1487,13 @@ const Admin = () => {
                   type="text"
                   value={serverFormData.url}
                   onChange={(e) => setServerFormData(prev => ({ ...prev, url: e.target.value }))}
-                  placeholder="https://example.com or http://localhost:5001"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Category</label>
-                <input
-                  type="text"
-                  value={serverFormData.category}
-                  onChange={(e) => setServerFormData(prev => ({ ...prev, category: e.target.value }))}
-                  placeholder="general, sports, food, etc."
-                />
-              </div>
-              <div className="form-group">
-                <label>Description *</label>
-                <textarea
-                  value={serverFormData.description}
-                  onChange={(e) => setServerFormData(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Tell us about this server..."
+                  placeholder="http://localhost:5001"
                   required
                 />
               </div>
               <div className="modal-actions">
                 <button type="button" className="action-btn-sm" onClick={() => setServerModalOpen(false)}>Cancel</button>
-                <button type="submit" className="primary-btn" style={{ backgroundColor: '#5865f2' }}>Add Server</button>
+                <button type="submit" className="primary-btn" style={{ backgroundColor: '#5865f2' }}>Add Trusted Server</button>
               </div>
             </form>
           </div>

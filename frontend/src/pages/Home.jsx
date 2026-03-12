@@ -23,14 +23,13 @@ function Home() {
       setLoading(true);
       const token = localStorage.getItem('token');
 
-      let url = `${API_BASE_URL}/posts`; // Default for 'local'
+      let url = `${API_BASE_URL}/posts/timeline`; // Default — personalised feed
       if (activeTimeline === 'home') {
         url = `${API_BASE_URL}/posts/timeline`;
+      } else if (activeTimeline === 'mine') {
+        // "My Posts" tab — own posts only via the new /posts/users endpoint
+        url = `${API_BASE_URL}/posts/users`;
       } else if (activeTimeline === 'federated') {
-        // For now federated tab can just be an empty placeholder or a specific cross-server logic
-        // But getTimeline actually already includes remote posts, so 'home' is the federated aware one.
-        // We'll keep 'local' as strictly local /api/posts.
-        // For 'federated' specifically, we can use a server-filtered query if implemented.
         setPosts([]);
         setLoading(false);
         return;

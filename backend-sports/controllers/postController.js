@@ -10,16 +10,30 @@ import {
 import { sendFederationEvent } from "../services/federationService.js";
 import UserFollow from "../models/UserFollow.js";
 import ChannelFollow from "../models/ChannelFollow.js";
+import UserMute from "../models/UserMute.js";
 import TrustedServer from "../models/TrustedServer.js";
 import axios from "axios";
 
 
 export const createPost = async (req, res, next) => {
   try {
-    const { description, image, isChannelPost, channelName } = req.body;
+    const { description, image, images, isChannelPost } = req.body;
+    let { channelName } = req.body;
 
     if (!description || description.trim() === "") {
       return next(createError(400, "Post description is required"));
+    }
+
+    if (!req.user.federatedId) {
+      return next(createError(401, "User identity not found. Please log in again."));
+    }
+
+    // handle images - support both single image and array
+    let imageList = [];
+    if (images && Array.isArray(images)) {
+      imageList = images.slice(0, 4); // max 4
+    } else if (image) {
+      imageList = [image];
     }
 
     const isUserPost = !isChannelPost;
@@ -46,6 +60,26 @@ export const createPost = async (req, res, next) => {
             return next(createError(404, "Channel not found"));
           }
 
+          // Override channelName to just the name part so the DB saves "sports" not "sports@food"
+          channelName = name;
+
+          // RBAC Check (same as plain local channel path)
+          if (req.user.role !== 'admin') {
+            if (channel.visibility === 'read-only') {
+              return next(createError(403, "This channel is read-only. Only admins can post."));
+            }
+            if (channel.visibility === 'private') {
+              const isMember = await ChannelFollow.findOne({
+                userFederatedId: req.user.federatedId,
+                channelFederatedId: channel.federatedId,
+                status: 'active'
+              });
+              if (!isMember) {
+                return next(createError(403, "Join this private community to post."));
+              }
+            }
+          }
+
           postFederatedId = `${name}@${req.user.serverName}/post/${Date.now()}`;
         } else {
           // REMOTE CHANNEL CASE
@@ -60,8 +94,10 @@ export const createPost = async (req, res, next) => {
             objectFederatedId: postFederatedId,
             data: {
               description: description.trim(),
-              image,
+              image: imageList.length > 0 ? imageList[0] : null,
+              images: imageList,
               isChannelPost: true,
+              isUserPost: false,
               channelName: name,
               userDisplayName: req.user.displayName,
               isRepost: req.body.isRepost || false,
@@ -77,15 +113,17 @@ export const createPost = async (req, res, next) => {
           // 2. Write local record ONLY if federation succeeded
           const savedPost = await createPostService({
             description: description.trim(),
-            image,
+            image: imageList.length > 0 ? imageList[0] : null,
+            images: imageList,
             isUserPost: false,
             userDisplayName: req.user.displayName,
             authorFederatedId: req.user.federatedId,
             isChannelPost: true,
             channelName: name,
             federatedId: postFederatedId,
-            originServer,
-            isRemote: true
+            originServer: req.user.serverName,
+            serverName: targetServer,
+            isRemote: false
           });
 
           return res.status(201).json({ success: true, post: savedPost });
@@ -101,6 +139,23 @@ export const createPost = async (req, res, next) => {
           return next(createError(404, "Channel not found"));
         }
 
+        // RBAC Check for posting
+        if (req.user.role !== 'admin') {
+          if (channel.visibility === 'read-only') {
+            return next(createError(403, "This channel is read-only. Only admins can post."));
+          }
+          if (channel.visibility === 'private') {
+            const isMember = await ChannelFollow.findOne({
+              userFederatedId: req.user.federatedId,
+              channelFederatedId: channel.federatedId,
+              status: 'active'
+            });
+            if (!isMember) {
+              return next(createError(403, "Join this private community to post."));
+            }
+          }
+        }
+
         postFederatedId = `${channelName}@${req.user.serverName}/post/${Date.now()}`;
       }
     } else {
@@ -111,14 +166,16 @@ export const createPost = async (req, res, next) => {
     // Local Case: User Post or Local Channel Post
     const savedPost = await createPostService({
       description: description.trim(),
-      image,
+      image: imageList.length > 0 ? imageList[0] : null,
+      images: imageList,
       isUserPost,
       userDisplayName: req.user.displayName,
       authorFederatedId: req.user.federatedId,
       isChannelPost,
       channelName,
       federatedId: postFederatedId,
-      originServer,
+      originServer: req.user.serverName,
+      serverName: req.user.serverName,
       isRemote: false
     });
 
@@ -231,20 +288,205 @@ export const likePost = async (req, res, next) => {
 };
 
 
-export const getPosts = async (req, res, next) => {
+/**
+ * GET /api/posts/channels
+ * Fetches posts for a channel identified by channelFederatedId (e.g. "sports@server1.com").
+ *
+ * Logic:
+ *   - Parse channelFederatedId into [name, serverName].
+ *   - If serverName matches this server → local DB query (with private-channel guard).
+ *   - If serverName is a different server → send a federated HTTP request to that
+ *     server's federation feed endpoint and return the results directly (no local cache).
+ */
+export const getPostChannels = async (req, res, next) => {
   try {
-    const { authorFederatedId } = req.query;
+    const { channelFederatedId } = req.query;
+    const limit = parseInt(req.query.limit) || 10;
+    const page  = parseInt(req.query.page)  || 1;
+    const skip  = (page - 1) * limit;
 
-    const query = {};
-    if (authorFederatedId) {
-      query.authorFederatedId = authorFederatedId;
+    if (!channelFederatedId) {
+      return next(createError(400, "channelFederatedId query param is required (e.g. sports@server1.com)"));
     }
 
-    const posts = await Post.find(query).sort({ createdAt: -1 });
+    const localServer = (process.env.SERVER_NAME || "").toLowerCase();
 
-    res.status(200).json({
+    // ── Parse "name@serverName" ───────────────────────────────────────────────
+    let channelName, targetServer;
+    if (channelFederatedId.includes("@")) {
+      [channelName, targetServer] = channelFederatedId.split("@");
+      targetServer = targetServer.toLowerCase();
+    } else {
+      // No @ supplied → treat as a local channel name
+      channelName  = channelFederatedId;
+      targetServer = localServer;
+    }
+
+    // ── A. FEDERATED PATH (different server) ─────────────────────────────────
+    if (targetServer !== localServer) {
+      const trusted = await TrustedServer.findOne({ serverName: targetServer, isActive: true });
+      if (!trusted) {
+        return next(createError(403, `Server "${targetServer}" is not trusted or is offline`));
+      }
+
+      const params = new URLSearchParams({
+        type: "GET_CHANNEL_POSTS",
+        channelName,
+        page:  String(page),
+        limit: String(limit)
+      });
+
+      try {
+        const { data } = await axios.get(
+          `${trusted.serverUrl}/api/federation/feed?${params.toString()}`,
+          {
+            headers: { "x-origin-server": process.env.SERVER_NAME },
+            timeout: 5000
+          }
+        );
+        return res.status(200).json({
+          success: true,
+          posts:   (data.posts || []).map(p => ({ ...p, isRemote: true })),
+          hasMore: data.hasMore ?? false,
+          source:  "federated"
+        });
+      } catch {
+        return next(createError(502, `Remote server "${targetServer}" is offline or unreachable`));
+      }
+    }
+
+    // ── B. LOCAL PATH (same server) ───────────────────────────────────────────
+    // Private-channel guard
+    const channel = await Channel.findOne({
+      name:       { $regex: new RegExp(`^${channelName}$`, "i") },
+      serverName: { $regex: new RegExp(`^${localServer}$`, "i") }
+    });
+
+    if (channel && channel.visibility === "private") {
+      const isMember = await ChannelFollow.findOne({
+        userFederatedId:    req.user.federatedId,
+        channelFederatedId: channel.federatedId,
+        status:             "active"
+      });
+      if (!isMember && req.user.role !== "admin") {
+        return res.status(200).json({
+          success: true,
+          posts:   [],
+          hasMore: false,
+          message: "Private channel: follow to view posts"
+        });
+      }
+    }
+
+    const query = {
+      channelName:   { $regex: new RegExp(`^${channelName}$`, "i") },
+      serverName:    localServer,
+      isChannelPost: true
+    };
+
+    const [posts, totalCount] = await Promise.all([
+      Post.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Post.countDocuments(query)
+    ]);
+
+    return res.status(200).json({
       success: true,
-      posts
+      posts,
+      hasMore: skip + posts.length < totalCount,
+      source:  "local"
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+
+/**
+ * GET /api/posts/users
+ * Fetches user (non-channel) posts.
+ *
+ * Logic:
+ *   - No authorFederatedId supplied → return the logged-in user's own posts (local).
+ *   - authorFederatedId belongs to this server → local DB query.
+ *   - authorFederatedId belongs to a different server → federated HTTP request
+ *     to that server's federation feed (GET_USER_POSTS), passing the full federatedId.
+ */
+export const getPostsUsers = async (req, res, next) => {
+  try {
+    const { authorFederatedId } = req.query;
+    const limit = parseInt(req.query.limit) || 10;
+    const page  = parseInt(req.query.page)  || 1;
+    const skip  = (page - 1) * limit;
+
+    const localServer = (process.env.SERVER_NAME || "").toLowerCase();
+
+    // ── No ID supplied → return own posts (always local) ─────────────────────
+    if (!authorFederatedId) {
+      const query = { authorFederatedId: req.user.federatedId };
+      const [posts, totalCount] = await Promise.all([
+        Post.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+        Post.countDocuments(query)
+      ]);
+      return res.status(200).json({
+        success: true,
+        posts,
+        hasMore: skip + posts.length < totalCount
+      });
+    }
+
+    // ── Parse server from federatedId: "username@serverName" ─────────────────
+    // User federatedId format: "username@serverName"
+    const atIndex     = authorFederatedId.lastIndexOf("@");
+    const targetServer = atIndex !== -1
+      ? authorFederatedId.slice(atIndex + 1).toLowerCase()
+      : localServer;
+
+    // ── A. FEDERATED PATH (different server) ─────────────────────────────────
+    if (targetServer !== localServer) {
+      const trusted = await TrustedServer.findOne({ serverName: targetServer, isActive: true });
+      if (!trusted) {
+        return next(createError(403, `Server "${targetServer}" is not trusted or is offline`));
+      }
+
+      const params = new URLSearchParams({
+        type: "GET_USER_POSTS",
+        authorFederatedId,
+        page:  String(page),
+        limit: String(limit)
+      });
+
+      try {
+        const { data } = await axios.get(
+          `${trusted.serverUrl}/api/federation/feed?${params.toString()}`,
+          {
+            headers: { "x-origin-server": process.env.SERVER_NAME },
+            timeout: 5000
+          }
+        );
+        return res.status(200).json({
+          success: true,
+          posts:   (data.posts || []).map(p => ({ ...p, isRemote: true })),
+          hasMore: data.hasMore ?? false,
+          source:  "federated"
+        });
+      } catch {
+        return next(createError(502, `Remote server "${targetServer}" is offline or unreachable`));
+      }
+    }
+
+    // ── B. LOCAL PATH (same server) ───────────────────────────────────────────
+    const query = { authorFederatedId };
+    const [posts, totalCount] = await Promise.all([
+      Post.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Post.countDocuments(query)
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      posts,
+      hasMore: skip + posts.length < totalCount,
+      source:  "local"
     });
 
   } catch (err) {
@@ -270,7 +512,9 @@ export const createComment = async (req, res, next) => {
         actorFederatedId: req.user.federatedId,
         objectFederatedId: req.body.postFederatedId,
         data: {
-          content: content.trim()
+          content:     content.trim(),
+          displayName: req.user.displayName,
+          image:       req.user.image || null
         }
       });
 
@@ -374,6 +618,7 @@ export const repostPost = async (req, res, next) => {
     const savedRepost = await createPostService({
       description: originalPost.description,
       image: originalPost.image,
+      images: originalPost.images,
       isUserPost: true,
       userDisplayName: req.user.displayName,
       authorFederatedId: req.user.federatedId,
@@ -398,7 +643,6 @@ export const repostPost = async (req, res, next) => {
 };
 
 
-
 /**
  * GET /api/posts/timeline
  * Returns a personalised feed for the logged-in user:
@@ -413,16 +657,20 @@ export const getTimeline = async (req, res, next) => {
     const userId = req.user.federatedId;
 
     // ── 1. Fetch all follow relationships for this user ──────────────────────
-    const [userFollows, channelFollows] = await Promise.all([
+    const [userFollows, channelFollows, userMutes] = await Promise.all([
       UserFollow.find({ followerFederatedId: userId }),
-      ChannelFollow.find({ userFederatedId: userId })
+      ChannelFollow.find({ userFederatedId: userId }),
+      UserMute.find({ muterFederatedId: userId })
     ]);
+
+    const mutedFederatedIds = new Set(userMutes.map(m => m.mutedFederatedId));
 
     // ── 2. Split into local vs remote ────────────────────────────────────────
     const localUserIds = [];
     const remoteUserMap = {}; // { serverName: [federatedId, ...] }
 
     for (const f of userFollows) {
+      if (mutedFederatedIds.has(f.followingFederatedId)) continue;
       if (f.followingOriginServer === process.env.SERVER_NAME) {
         localUserIds.push(f.followingFederatedId);
       } else {
@@ -505,13 +753,16 @@ export const getTimeline = async (req, res, next) => {
     const remoteUserPosts = allRemotePosts.filter(p => !p.channelName).slice(0, 10);
     const remoteChannelPosts = allRemotePosts.filter(p => !!p.channelName).slice(0, 10);
 
-    // ── 6. Merge all four buckets and shuffle ────────────────────────────────
+    // ── 6. Merge all four buckets, filter muted authors, and shuffle ─────────
     const combined = [
       ...localUserPosts,
       ...localChannelPosts,
       ...remoteUserPosts,
       ...remoteChannelPosts
-    ];
+    ].filter(p =>
+      !mutedFederatedIds.has(p.authorFederatedId) &&
+      !(p.isRepost && mutedFederatedIds.has(p.originalAuthorFederatedId))
+    );
 
     // Fisher-Yates shuffle for a random feed order
     for (let i = combined.length - 1; i > 0; i--) {
@@ -538,6 +789,24 @@ export const getTimeline = async (req, res, next) => {
       posts: deduplicatedFeed
     });
 
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * GET /api/posts - ADMIN ONLY
+ * Fetches all posts for the admin dashboard statistics
+ */
+export const getAllPostsAdmin = async (req, res, next) => {
+  try {
+    // Only return the fields needed for stats to keep payload small
+    const posts = await Post.find({}, '_id createdAt');
+    
+    return res.status(200).json({
+      success: true,
+      posts
+    });
   } catch (err) {
     next(err);
   }

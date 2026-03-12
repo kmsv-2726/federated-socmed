@@ -20,6 +20,7 @@ export const createReport = async (req, res, next) => {
     const isRemoteTarget = originServer !== process.env.SERVER_NAME;
 
     if (isRemoteTarget) {
+      // 1. Notify the remote server FIRST
       const response = await sendFederationEvent({
         type: "REPORT",
         actorFederatedId: reporterId,
@@ -34,8 +35,26 @@ export const createReport = async (req, res, next) => {
       if (response && (response.queued || response.skipped)) {
         return next(createError(502, "Remote server is offline or unreachable. Report failed."));
       }
+
+      // 2. Write local record ONLY if federation succeeded
+      const savedReport = await createReportService({
+        reporterId,
+        reportedId,
+        targetType,
+        reason,
+        description,
+        targetOriginServer: originServer,
+        isRemoteTarget
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: "Report submitted successfully",
+        reportId: savedReport._id
+      });
     }
 
+    // Local report
     const savedReport = await createReportService({
       reporterId,
       reportedId,
@@ -45,6 +64,7 @@ export const createReport = async (req, res, next) => {
       targetOriginServer: originServer,
       isRemoteTarget
     });
+
 
     return res.status(201).json({
       success: true,

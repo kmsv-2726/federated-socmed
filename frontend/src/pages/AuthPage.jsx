@@ -256,7 +256,7 @@ const AuthPage = () => {
   return (
     <PageContainer>
       <FormsLayer>
-        <FormSide style={{ opacity: isSignUp ? 1 : 0, transition: "opacity 0.4s" }}>
+        <FormSide style={{ opacity: isSignUp ? 1 : 0, transition: "opacity 0.4s", pointerEvents: "auto" }}>
           <Title $dark>Create Account</Title>
           <Subtitle $dark>Join us today and start your journey.</Subtitle>
           <form onSubmit={handleSignup} style={{ width: "100%", maxWidth: "350px" }}>
@@ -320,14 +320,14 @@ const AuthPage = () => {
           </form>
         </FormSide>
 
-        <FormSide style={{ opacity: !isSignUp ? 1 : 0, transition: "opacity 0.4s" }}>
+        <FormSide style={{ opacity: !isSignUp ? 1 : 0, transition: "opacity 0.4s", pointerEvents: "auto" }}>
           <Title $dark>Welcome Back</Title>
           <Subtitle $dark>Login to access your dashboard.</Subtitle>
           <form onSubmit={handleLogin} style={{ width: "100%", maxWidth: "350px" }}>
             <Input
               type="email"
               name="email"
-              placeholder="Email"
+              placeholder="Email or Username"
               value={loginData.email}
               onChange={handleLoginChange}
               required

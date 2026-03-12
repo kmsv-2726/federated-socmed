@@ -32,6 +32,8 @@ export const getPublicKey = (req, res, next) => {
   }
 };
 
+
+
 /* ===== TRUSTED SERVER MANAGEMENT (ADMIN) ===== */
 
 export const addTrustedServer = async (req, res, next) => {
@@ -149,4 +151,14 @@ export const removeTrustedServer = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+};
+let globalFederationStatus = true;
+
+export const getFederationStatus = (req, res) => {
+  res.status(200).json({ success: true, isEnabled: globalFederationStatus });
+};
+
+export const toggleFederationStatus = (req, res) => {
+  globalFederationStatus = !globalFederationStatus;
+  res.status(200).json({ success: true, isEnabled: globalFederationStatus, message: `Federation is now ${globalFederationStatus ? 'ON' : 'OFF'}` });
 };

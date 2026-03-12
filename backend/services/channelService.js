@@ -66,3 +66,17 @@ export const getChannelProfileService = async (federatedId) => {
   if (!channel) throw createError(404, "Channel not found");
   return channel;
 };
+/**
+ * Shared service for searching channels using regex.
+ * Used by channelController (local search) and federationFeedController (remote search).
+ */
+export const searchChannelsService = async (query, limit = 5) => {
+  return await Channel.find(
+    {
+      $or: [
+        { name: { $regex: query, $options: "i" } },
+        { federatedId: { $regex: query, $options: "i" } }
+      ]
+    }
+  ).limit(limit);
+};

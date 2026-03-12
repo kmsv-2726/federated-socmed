@@ -3,22 +3,74 @@ import ActivityLog from "../models/ActivityLog.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { createError } from "../utils/error.js";
+import crypto from "crypto";
+import { sendUnlockEmail } from "../services/emailService.js";
+
+export const unlockAccount = async (req, res, next) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return next(createError(400, "Unlock token is required"));
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await User.findOne({
+      unlockToken: hashedToken,
+      unlockTokenExpiry: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return next(createError(400, "Invalid or expired unlock token"));
+    }
+
+    user.isActive = true;
+    user.failedLoginAttempts = 0;
+    user.unlockToken = null;
+    user.unlockTokenExpiry = null;
+    user.tokenVersion += 1; // Invalidate any rogue active sessions
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Your account has been successfully unlocked."
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
 
 export const loginUser = async (req, res, next) => {
   try {
-    const { displayName, email, password } = req.body;
-    if ((!displayName && !email) || !password) {
+    const { email, displayName, password } = req.body;
+    const identifier = email || displayName;
+    if (!identifier || !password) {
       return next(createError(400, "Missing credentials"));
     }
+
+    console.log(`[Auth] Login attempt for identifier: "${identifier}" on server: "${process.env.SERVER_NAME}"`);
 
     const user = await User.findOne({
       serverName: process.env.SERVER_NAME,
       isRemote: false,
-      $or: [{ displayName }, { email }]
+      $or: [
+        { displayName: { $regex: new RegExp(`^${identifier}$`, "i") } },
+        { email: identifier.toLowerCase() }
+      ]
     });
 
     if (!user) {
+      console.warn(`[Auth] User not found for identifier: "${identifier}"`);
       return next(createError(401, "Invalid credentials"));
+    }
+
+    console.log(`[Auth] Found user: "${user.displayName}". Active: ${user.isActive}. Failed attempts: ${user.failedLoginAttempts}`);
+
+    if (!user.isActive) {
+      return next(createError(403, "Account is locked or inactive due to multiple failed login attempts. Please check your email for unlock instructions."));
     }
 
     if (user.isSuspended) {
@@ -27,7 +79,34 @@ export const loginUser = async (req, res, next) => {
 
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) {
-      return next(createError(401, "Invalid credentials"));
+      user.failedLoginAttempts += 1;
+
+      if (user.failedLoginAttempts >= 5) {
+        user.isActive = false;
+
+        // Generate a secure random hex token
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        user.unlockToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+        user.unlockTokenExpiry = Date.now() + 60 * 60 * 1000; // 1 hour expiry
+
+        await user.save();
+
+        // Dispatch email asynchronously
+        sendUnlockEmail(user.email, resetToken).catch(err => {
+          console.error("Failed to send unlock email:", err);
+        });
+
+        return next(createError(403, "Maximum login attempts reached. Your account has been temporarily locked. Check your email to regain access."));
+      }
+
+      await user.save();
+      return next(createError(401, `Invalid credentials. You have ${5 - user.failedLoginAttempts} attempts remaining.`));
+    }
+
+    // Reset attempts on successful login
+    if (user.failedLoginAttempts > 0) {
+      user.failedLoginAttempts = 0;
+      await user.save();
     }
 
     const token = jwt.sign(
@@ -142,43 +221,4 @@ export const registerUser = async (req, res, next) => {
   }
 };
 
-export const logoutUser = async (req, res, next) => {
-  try {
-    const user = req.user; // Assuming auth middleware attach user
-    if (user) {
-      await ActivityLog.create({
-        userId: user.userId || user.id,
-        username: user.displayName,
-        federatedId: user.federatedId,
-        action: "LOGOUT"
-      });
-    }
-    res.status(200).json({ success: true, message: "Logged out successfully" });
-  } catch (err) {
-    next(err);
-  }
-};
 
-export const unlockAccount = async (req, res, next) => {
-  try {
-    const userId = req.body.userId || req.query.userId;
-
-    if (!userId) {
-      return res.status(400).json({ success: false, message: "User ID is required" });
-    }
-
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { isSuspended: false },
-      { new: true }
-    );
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
-
-    res.status(200).json({ success: true, message: "Account successfully unlocked!" });
-  } catch (err) {
-    next(err);
-  }
-};
