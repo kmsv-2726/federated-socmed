@@ -53,7 +53,7 @@ io.on("connection", (socket) => {
 })
 
 app.use(cors({
-  origin: ["http://localhost:5173", "http://localhost:3000", "https://federated-socialnetw.vercel.app"],
+  origin: ["http://localhost:5173", "http://localhost:3000", "https://heartfelt-cocada-80540c.netlify.app"],
   credentials: true
 }))
 

@@ -3,5 +3,5 @@
 export const getApiBaseUrl = () => {
     return localStorage.getItem('selectedServerApi') 
         || import.meta.env.VITE_API_BASE_URL 
-        || "http://localhost:5000/api";
+        || "https://food-api-3hzj.onrender.com/api";
 };
