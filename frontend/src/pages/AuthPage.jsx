@@ -1,11 +1,13 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import bg from "../Images/Image7.jpg";
+import image6 from "../Images/Image6.jpg";
+import image7 from "../Images/Image7.jpg";
 
 import { getApiBaseUrl } from '../config/api';
 
 const API_BASE_URL = getApiBaseUrl();
+const bg = API_BASE_URL.includes("food") ? image6 : image7;
 
 const PageContainer = styled.div`
   width: 100%;
