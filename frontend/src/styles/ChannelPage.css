@@ -176,3 +176,82 @@
     text-align: center;
   }
 }
+
+/* Admin Requests Section */
+.admin-requests-section {
+  margin-top: 24px;
+  background: #fdf2f8;
+  /* Soft pink/purpleish background to make it stand out */
+  border: 1px solid #fbcfe8;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.admin-requests-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #9d174d;
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+.admin-requests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-request-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.request-user {
+  font-weight: 600;
+  color: #111827;
+}
+
+.request-user small {
+  color: #6b7280;
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+.request-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-approve,
+.btn-reject {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.2s;
+}
+
+.btn-approve {
+  background: #10b981;
+  color: white;
+}
+
+.btn-reject {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-approve:hover,
+.btn-reject:hover {
+  opacity: 0.9;
+}

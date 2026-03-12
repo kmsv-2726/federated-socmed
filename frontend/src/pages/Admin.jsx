@@ -9,7 +9,9 @@ import {
 import ImageCropperModal from '../components/ImageCropperModal';
 import '../styles/Admin.css';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api");
+import { getApiBaseUrl } from '../config/api';
+
+const API_BASE_URL = getApiBaseUrl();
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -24,6 +26,7 @@ const Admin = () => {
   const [usersList, setUsersList] = useState([]);
   const [channelsList, setChannelsList] = useState([]);
   const [reportsList, setReportsList] = useState([]);
+  const [pendingRequests, setPendingRequests] = useState([]);
   const [serversList, setServersList] = useState([]);
   const [activitiesList, setActivitiesList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -69,11 +72,12 @@ const Admin = () => {
           headers: { Authorization: `Bearer ${token}` }
         };
 
-        const [usersRes, postsRes, channelsRes, reportsRes, serversRes, federationRes, activitiesRes] = await Promise.allSettled([
+        const [usersRes, postsRes, channelsRes, reportsRes, requestsRes, serversRes, federationRes, activitiesRes] = await Promise.allSettled([
           axios.get(`${API_BASE_URL}/user`, config),
           axios.get(`${API_BASE_URL}/posts`, config),
           axios.get(`${API_BASE_URL}/channels`, config),
           axios.get(`${API_BASE_URL}/reports?limit=100`, config),
+          axios.get(`${API_BASE_URL}/channels/all-requests`, config)
           axios.get(`${API_BASE_URL}/servers`, config),
           axios.get(`${API_BASE_URL}/federation/status`, config).catch(() => ({ data: { isEnabled: true } })),
           axios.get(`${API_BASE_URL}/activities`, config).catch(() => ({ data: { activities: [] } }))
@@ -104,6 +108,8 @@ const Admin = () => {
           newStats.reports = activeReports;
         }
 
+        if (requestsRes.status === 'fulfilled') {
+          setPendingRequests(requestsRes.value.data.requests || []);
         if (serversRes.status === 'fulfilled') {
           setServersList(serversRes.value.data.servers || []);
         }
@@ -310,6 +316,24 @@ const Admin = () => {
     setCropperTarget(null);
   };
 
+  const handleResolveRequest = async (channelName, userFederatedId, action) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.put(`${API_BASE_URL}/channels/resolve-request/${encodeURIComponent(channelName)}`,
+        { userFederatedId, action },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (res.data.success) {
+        setPendingRequests(prev => prev.filter(r => !(r.channelName === channelName && r.userFederatedId === userFederatedId)));
+      } else {
+        alert(res.data.message || 'Failed to resolve request');
+      }
+    } catch (err) {
+      console.error('Error resolving request:', err);
+      alert('Failed to resolve request');
+    }
+  };
+
   const reviewReport = async (reportId, action) => {
     if (!action) {
       alert(`Reviewing report: ${reportId}\n\nActions available: Approve, Reject`);
@@ -461,6 +485,28 @@ const Admin = () => {
               <span>Channels</span>
             </div>
             <div
+              className={`admin-nav-item ${activeTab === 'requests' ? 'active' : ''}`}
+              onClick={() => setActiveTab('requests')}
+            >
+              <FiLock size={18} />
+              <span>Channel Requests</span>
+              {pendingRequests.length > 0 && (
+                <span style={{
+                  marginLeft: 'auto',
+                  background: '#ef4444',
+                  color: 'white',
+                  borderRadius: '999px',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  padding: '1px 7px',
+                  minWidth: '20px',
+                  textAlign: 'center'
+                }}>
+                  {pendingRequests.length}
+                </span>
+              )}
+            </div>
+            <div
               className={`admin-nav-item ${activeTab === 'reports' ? 'active' : ''}`}
               onClick={() => setActiveTab('reports')}
             >
@@ -551,6 +597,22 @@ const Admin = () => {
 
                 <div className="stat-card">
                   <div className="stat-header">
+                    <FiLock size={18} />
+                    <span>Pending Requests</span>
+                  </div>
+                  <div className="stat-value">{pendingRequests.length}</div>
+                  <div className={`stat-trend ${pendingRequests.length > 0 ? 'trend-down' : 'trend-up'}`}>
+                    {pendingRequests.length > 0 ? <FiArrowDown size={14} /> : <FiArrowUp size={14} />}
+                    <span
+                      style={{ cursor: pendingRequests.length > 0 ? 'pointer' : 'default', textDecoration: pendingRequests.length > 0 ? 'underline' : 'none' }}
+                      onClick={() => pendingRequests.length > 0 && setActiveTab('requests')}
+                    >
+                      {pendingRequests.length > 0 ? 'Needs Action' : 'All clear'}
+                    </span>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-header">
                     <FiTrendingUp size={18} />
                     <span>Engagement Rate</span>
                   </div>
@@ -634,50 +696,136 @@ const Admin = () => {
                 </table>
               </section>
             </>
-          )}
+          )
+          }
 
-          {activeTab === 'users' && (
-            <div className="admin-section">
-              <div className="section-header">
-                <h2 className="section-h2">All Users</h2>
-              </div>
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Avatar</th>
-                    <th>Display Name</th>
-                    <th>Federated ID</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usersList.map(user => (
-                    <tr key={user._id || user.federatedId}>
-                      <td>
-                        {user.avatarUrl ? (
-                          <img src={user.avatarUrl} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
-                        ) : (
-                          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#ddd' }}></div>
-                        )}
-                      </td>
-                      <td>{user.displayName}</td>
-                      <td>{user.federatedId}</td>
-                      <td>{user.email || 'N/A'}</td>
-                      <td>
-                        <span className={`status-badge`} style={{ backgroundColor: user.role === 'admin' ? '#dbeafe' : '#d1fae5', color: user.role === 'admin' ? '#1e40af' : '#065f46' }}>
-                          {user.role || 'user'}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`status-badge ${user.isSuspended ? 'status-suspended' : 'status-active'}`}>
-                          {user.isSuspended ? 'Suspended' : 'Active'}
-                        </span>
-                      </td>
-                      <td><button className="action-btn-sm" onClick={() => manageUser(user.displayName)}>Manage</button></td>
+          {
+            activeTab === 'users' && (
+              <div className="admin-section">
+                <div className="section-header">
+                  <h2 className="section-h2">All Users</h2>
+                </div>
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Avatar</th>
+                      <th>Display Name</th>
+                      <th>Federated ID</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Status</th>
+                      <th>Actions</th>
                     </tr>
+                  </thead>
+                  <tbody>
+                    {usersList.map(user => (
+                      <tr key={user._id || user.federatedId}>
+                        <td>
+                          {user.avatarUrl ? (
+                            <img src={user.avatarUrl} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
+                          ) : (
+                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#ddd' }}></div>
+                          )}
+                        </td>
+                        <td>{user.displayName}</td>
+                        <td>{user.federatedId}</td>
+                        <td>{user.email || 'N/A'}</td>
+                        <td>
+                          <span className={`status-badge`} style={{ backgroundColor: user.role === 'admin' ? '#dbeafe' : '#d1fae5', color: user.role === 'admin' ? '#1e40af' : '#065f46' }}>
+                            {user.role || 'user'}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`status-badge ${user.isSuspended ? 'status-suspended' : 'status-active'}`}>
+                            {user.isSuspended ? 'Suspended' : 'Active'}
+                          </span>
+                        </td>
+                        <td><button className="action-btn-sm" onClick={() => manageUser(user.displayName)}>Manage</button></td>
+                      </tr>
+                    ))}
+                    {usersList.length === 0 && <tr><td colSpan="7">No users found.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            )
+          }
+
+          {
+            activeTab === 'channels' && (
+              <div className="admin-section">
+                <div className="section-header">
+                  <h2 className="section-h2">All Channels</h2>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button className="primary-btn" onClick={() => setCreateModalOpen(true)}>Create New Channel</button>
+                    <button
+                      className="action-btn-sm"
+                      onClick={async () => {
+                        try {
+                          const token = localStorage.getItem('token');
+                          const config = { headers: { Authorization: `Bearer ${token}` } };
+                          const samples = [
+                            { name: 'announcements', description: 'Company-wide announcements and notices', rules: ['Be respectful', 'No spam'], visibility: 'read-only', image: '' },
+                            { name: 'press', description: 'Press releases and media statements', rules: ['Official content only'], visibility: 'read-only', image: '' },
+                            { name: 'hr', description: 'HR policies and internal updates', rules: ['Internal use'], visibility: 'private', image: '' },
+                            { name: 'finance', description: 'Finance planning and budget reviews', rules: ['Confidential'], visibility: 'private', image: '' }
+                          ];
+                          for (const ch of samples) {
+                            try {
+                              await axios.post(`${API_BASE_URL}/channels`, ch, config);
+                            } catch {
+                              console.warn('Failed to seed a sample channel');
+                            }
+                          }
+                          const refreshed = await axios.get(`${API_BASE_URL}/channels`, config);
+                          setChannelsList(refreshed.data.channels || []);
+                          alert('Sample channels seeded.');
+                        } catch {
+                          alert('Failed to seed channels.');
+                        }
+                      }}
+                    >
+                      Seed Sample Channels
+                    </button>
+                  </div>
+                </div>
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Channel Name</th>
+                      <th>Description</th>
+                      <th>Status (Visibility)</th>
+                      <th>Followers</th>
+                      <th>Created</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {channelsList.map(channel => (
+                      <tr key={channel._id}>
+                        <td>#{channel.name}</td>
+                        <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{channel.description}</td>
+                        <td>
+                          <span className={`status-badge ${channel.visibility === 'public' ? 'status-active' : 'status-pending'}`}>
+                            {channel.visibility}
+                          </span>
+                        </td>
+                        <td>{channel.followersCount}</td>
+                        <td>{formatDate(channel.createdAt)}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button className="action-btn-sm" onClick={() => openEditModal(channel)} title="Update">
+                              <FiEdit size={14} /> Update
+                            </button>
+                            <button className="action-btn-sm" style={{ color: '#ef4444', borderColor: '#fee2e2' }} onClick={() => handleDeleteChannel(channel._id)} title="Delete">
+                              <FiTrash2 size={14} /> Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {channelsList.length === 0 && <tr><td colSpan="6">No channels found.</td></tr>}
+                  </tbody>
+                </table>
                   ))}
                   {usersList.length === 0 && <tr><td colSpan="7">No users found.</td></tr>}
                 </tbody>
@@ -739,43 +887,52 @@ const Admin = () => {
                 <button className="action-btn-sm" onClick={() => { }}>Refetch</button>
               </div>
 
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Report ID</th>
-                    <th>Type</th>
-                    <th>Target</th>
-                    <th>Reason</th>
-                    <th>Status</th>
-                    <th>Reported By</th>
-                    <th>Date</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {reportsList.map(report => (
-                    <tr key={report._id}>
-                      <td>#{report._id.slice(-6)}</td>
-                      <td>{report.targetType}</td>
-                      <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{report.reportedId}</td>
-                      <td>{report.reason}</td>
-                      <td>
-                        <span className={`status-badge ${report.status === 'pending' ? 'status-active' : ''}`} style={{ backgroundColor: report.status === 'resolved' ? '#d1fae5' : report.status === 'dismissed' ? '#f3f4f6' : '#fee2e2', color: report.status === 'resolved' ? '#065f46' : report.status === 'dismissed' ? '#374151' : '#991b1b' }}>
-                          {report.status}
-                        </span>
-                      </td>
-                      <td>{report.reporterId}</td>
-                      <td>{formatTimeAgo(report.createdAt)}</td>
-                      <td>
-                        {report.status === 'pending' && (
-                          <>
-                            <button className="action-btn-sm" onClick={() => reviewReport(report._id, 'dismiss')}>Dismiss</button>
-                            <button className="action-btn-sm" style={{ marginLeft: '5px', color: 'green', borderColor: 'green' }} onClick={() => reviewReport(report._id, 'resolve')}>Resolve</button>
-                          </>
-                        )}
-                        {report.status !== 'pending' && <span style={{ color: '#6b7280', fontSize: '0.8em' }}>Archived</span>}
-                      </td>
+                <div className="section-header" style={{ marginTop: '40px' }}>
+                  <h2 className="section-h2">Pending Access Requests</h2>
+                </div>
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Channel</th>
+                      <th>User</th>
+                      <th>Date</th>
+                      <th>Actions</th>
                     </tr>
+                  </thead>
+                  <tbody>
+                    {pendingRequests.map(req => (
+                      <tr key={req._id}>
+                        <td>#{req.channelName}</td>
+                        <td>{req.userDisplayName} <small style={{ color: '#6b7280' }}>({req.userFederatedId})</small></td>
+                        <td>{formatDate(req.createdAt)}</td>
+                        <td>
+                          <button className="action-btn-sm" style={{ color: '#10b981', borderColor: '#10b981' }} onClick={() => handleResolveRequest(req.channelName, req.userFederatedId, 'approve')}>Approve</button>
+                          <button className="action-btn-sm" style={{ color: '#ef4444', borderColor: '#ef4444', marginLeft: '8px' }} onClick={() => handleResolveRequest(req.channelName, req.userFederatedId, 'reject')}>Reject</button>
+                        </td>
+                      </tr>
+                    ))}
+                    {pendingRequests.length === 0 && <tr><td colSpan="4">No pending requests.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            )
+          }
+
+          {
+            activeTab === 'requests' && (
+              <div className="admin-section">
+                <div className="admin-header">
+                  <h1 className="page-title">Channel Access Requests</h1>
+                  <span style={{ fontSize: '14px', color: '#6b7280' }}>
+                    {pendingRequests.length} pending
+                  </span>
+                </div>
+
+                {pendingRequests.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9ca3af' }}>
+                    <FiLock size={40} style={{ marginBottom: '12px', opacity: 0.4 }} />
+                    <p style={{ fontSize: '16px', fontWeight: '600' }}>No pending requests</p>
+                    <p style={{ fontSize: '14px', marginTop: '4px' }}>Access requests for private channels will appear here.</p>
                   ))}
                   {reportsList.length === 0 && <tr><td colSpan="8">No reports found.</td></tr>}
                 </tbody>
@@ -806,11 +963,58 @@ const Admin = () => {
                       }
                     })()}</span>
                   </div>
-                </div>
-              </section>
+                ) : (
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Channel</th>
+                        <th>User</th>
+                        <th>Federated ID</th>
+                        <th>Requested</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingRequests.map(req => (
+                        <tr key={req._id}>
+                          <td>
+                            <span style={{ fontWeight: '600', color: '#6366f1' }}>#{req.channelName}</span>
+                            <span style={{ marginLeft: '6px', fontSize: '11px', background: '#fef3c7', color: '#92400e', padding: '2px 6px', borderRadius: '999px' }}>private</span>
+                          </td>
+                          <td style={{ fontWeight: '500' }}>{req.userDisplayName}</td>
+                          <td style={{ fontSize: '13px', color: '#6b7280' }}>{req.userFederatedId}</td>
+                          <td>{formatTimeAgo(req.createdAt)}</td>
+                          <td>
+                            <button
+                              className="action-btn-sm"
+                              style={{ color: '#10b981', borderColor: '#10b981', marginRight: '8px' }}
+                              onClick={() => handleResolveRequest(req.channelName, req.userFederatedId, 'approve')}
+                            >
+                              ✓ Approve
+                            </button>
+                            <button
+                              className="action-btn-sm"
+                              style={{ color: '#ef4444', borderColor: '#ef4444' }}
+                              onClick={() => handleResolveRequest(req.channelName, req.userFederatedId, 'reject')}
+                            >
+                              ✕ Reject
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )
+          }
 
+          {
+            activeTab === 'reports' && (
               <section className="admin-section">
                 <div className="section-header">
+                  <h2 className="section-h2">All Reports</h2>
+                  <button className="action-btn-sm" onClick={() => { }}>Refetch</button>
                   <h2 className="section-h2">Remote / Connected Servers</h2>
                   <button className="primary-btn" onClick={() => setServerModalOpen(true)}>Add New Server</button>
                 </div>
@@ -873,79 +1077,156 @@ const Admin = () => {
                     {globalFederationEnabled ? 'FEDERATION: ON' : 'FEDERATION: OFF'}
                   </button>
                 </div>
+
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Report ID</th>
+                      <th>Type</th>
+                      <th>Target</th>
+                      <th>Reason</th>
+                      <th>Status</th>
+                      <th>Reported By</th>
+                      <th>Date</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportsList.map(report => (
+                      <tr key={report._id}>
+                        <td>#{report._id.slice(-6)}</td>
+                        <td>{report.targetType}</td>
+                        <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{report.reportedId}</td>
+                        <td>{report.reason}</td>
+                        <td>
+                          <span className={`status-badge ${report.status === 'pending' ? 'status-active' : ''}`} style={{ backgroundColor: report.status === 'resolved' ? '#d1fae5' : report.status === 'dismissed' ? '#f3f4f6' : '#fee2e2', color: report.status === 'resolved' ? '#065f46' : report.status === 'dismissed' ? '#374151' : '#991b1b' }}>
+                            {report.status}
+                          </span>
+                        </td>
+                        <td>{report.reporterId}</td>
+                        <td>{formatTimeAgo(report.createdAt)}</td>
+                        <td>
+                          {report.status === 'pending' && (
+                            <>
+                              <button className="action-btn-sm" onClick={() => reviewReport(report._id, 'dismiss')}>Dismiss</button>
+                              <button className="action-btn-sm" style={{ marginLeft: '5px', color: 'green', borderColor: 'green' }} onClick={() => reviewReport(report._id, 'resolve')}>Resolve</button>
+                            </>
+                          )}
+                          {report.status !== 'pending' && <span style={{ color: '#6b7280', fontSize: '0.8em' }}>Archived</span>}
+                        </td>
+                      </tr>
+                    ))}
+                    {reportsList.length === 0 && <tr><td colSpan="8">No reports found.</td></tr>}
+                  </tbody>
+                </table>
               </section>
-            </>
-          )}
+            )
+          }
 
-          {(activeTab === 'blocked' || activeTab === 'security') && (
-            <div className="admin-section">
-              <h2>{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Settings</h2>
-              <p>Coming soon...</p>
-            </div>
-          )}
+          {
+            activeTab === 'server' && (
+              <>
+                <section className="admin-section">
+                  <div className="section-header">
+                    <h2 className="section-h2">Server Identity</h2>
+                    <button className="primary-btn" onClick={() => alert('Edit functionality coming soon')}>Edit</button>
+                  </div>
+                  <div className="server-info-content">
+                    <h3 style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.05em' }}>Server Name</h3>
+                    <div style={{ fontSize: '18px', fontWeight: '600', color: '#111827', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <FiServer size={24} />
+                      <span>Connected Main Server</span>
+                    </div>
+                  </div>
+                </section>
 
-        </main>
-      </div>
+                <section className="admin-section">
+                  <div className="section-header">
+                    <h2 className="section-h2">Description</h2>
+                  </div>
+                  <div className="server-info-content">
+                    <div style={{ fontSize: '15px', lineHeight: '1.6', color: '#374151', backgroundColor: '#f9fafb', padding: '16px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                      This is the primary community server for Connected. All general discussions, updates, and public channels are hosted here.
+                    </div>
+                  </div>
+                </section>
+              </>
+            )
+          }
+
+          {
+            (activeTab === 'blocked' || activeTab === 'security') && (
+              <div className="admin-section">
+                <h2>{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Settings</h2>
+                <p>Coming soon...</p>
+              </div>
+            )
+          }
+
+        </main >
+      </div >
 
       {/* Edit Channel Modal */}
-      {editModalOpen && editingChannel && (
-        <div className="modal-overlay" onClick={() => setEditModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2>Edit Channel: #{editingChannel.name}</h2>
-            <form onSubmit={handleEditSubmit}>
-              <div className="form-group">
-                <label>Description</label>
-                <textarea
-                  value={editFormData.description}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Channel description..."
-                />
-              </div>
-              <div className="form-group">
-                <label>Rules (one per line)</label>
-                <textarea
-                  value={editFormData.rules}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, rules: e.target.value }))}
-                  placeholder="Enter rules, one per line..."
-                  rows={5}
-                />
-              </div>
-              <div className="form-group">
-                <label>Channel Image</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleEditChannelImageChange}
-                    style={{ padding: '8px', border: '1px solid #e5e7eb', borderRadius: '4px' }}
+      {
+        editModalOpen && editingChannel && (
+          <div className="modal-overlay" onClick={() => setEditModalOpen(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <h2>Edit Channel: #{editingChannel.name}</h2>
+              <form onSubmit={handleEditSubmit}>
+                <div className="form-group">
+                  <label>Description</label>
+                  <textarea
+                    value={editFormData.description}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Channel description..."
                   />
-                  {editFormData.image && (
-                    <div style={{ position: 'relative', width: '200px', height: '100px', borderRadius: '8px', overflow: 'hidden' }}>
-                      <img
-                        src={editFormData.image}
-                        alt="Channel Preview"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setEditFormData(prev => ({ ...prev, image: '' }))}
-                        style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )}
                 </div>
-              </div>
+                <div className="form-group">
+                  <label>Rules (one per line)</label>
+                  <textarea
+                    value={editFormData.rules}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, rules: e.target.value }))}
+                    placeholder="Enter rules, one per line..."
+                    rows={5}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Channel Image</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleEditChannelImageChange}
+                      style={{ padding: '8px', border: '1px solid #e5e7eb', borderRadius: '4px' }}
+                    />
+                    {editFormData.image && (
+                      <div style={{ position: 'relative', width: '200px', height: '100px', borderRadius: '8px', overflow: 'hidden' }}>
+                        <img
+                          src={editFormData.image}
+                          alt="Channel Preview"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setEditFormData(prev => ({ ...prev, image: '' }))}
+                          style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-              <div className="modal-actions">
-                <button type="button" className="action-btn-sm" onClick={() => setEditModalOpen(false)}>Cancel</button>
-                <button type="submit" className="primary-btn">Save Changes</button>
-              </div>
-            </form>
+                <div className="modal-actions">
+                  <button type="button" className="action-btn-sm" onClick={() => setEditModalOpen(false)}>Cancel</button>
+                  <button type="submit" className="primary-btn">Save Changes</button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Create Channel Modal */}
       {createModalOpen && (
@@ -994,34 +1275,74 @@ const Admin = () => {
                 <label>Channel Image</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleChannelImageChange}
-                    style={{ padding: '8px', border: '1px solid #e5e7eb', borderRadius: '4px' }}
+                    type="text"
+                    value={createFormData.name}
+                    onChange={(e) => setCreateFormData(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="e.g., recipes, sports-news"
+                    required
                   />
-                  {createFormData.image && (
-                    <div style={{ position: 'relative', width: '200px', height: '100px', borderRadius: '8px', overflow: 'hidden' }}>
-                      <img
-                        src={createFormData.image}
-                        alt="Channel Preview"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setCreateFormData(prev => ({ ...prev, image: '' }))}
-                        style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )}
                 </div>
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="action-btn-sm" onClick={() => setCreateModalOpen(false)}>Cancel</button>
-                <button type="submit" className="primary-btn">Create Channel</button>
-              </div>
-            </form>
+                <div className="form-group">
+                  <label>Description</label>
+                  <textarea
+                    value={createFormData.description}
+                    onChange={(e) => setCreateFormData(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Channel description..."
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Rules (one per line)</label>
+                  <textarea
+                    value={createFormData.rules}
+                    onChange={(e) => setCreateFormData(prev => ({ ...prev, rules: e.target.value }))}
+                    placeholder="Enter rules, one per line..."
+                    rows={4}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Visibility</label>
+                  <select
+                    value={createFormData.visibility}
+                    onChange={(e) => setCreateFormData(prev => ({ ...prev, visibility: e.target.value }))}
+                  >
+                    <option value="public">Public</option>
+                    <option value="private">Private</option>
+                    <option value="read-only">Read-only</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Channel Image</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleChannelImageChange}
+                      style={{ padding: '8px', border: '1px solid #e5e7eb', borderRadius: '4px' }}
+                    />
+                    {createFormData.image && (
+                      <div style={{ position: 'relative', width: '200px', height: '100px', borderRadius: '8px', overflow: 'hidden' }}>
+                        <img
+                          src={createFormData.image}
+                          alt="Channel Preview"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setCreateFormData(prev => ({ ...prev, image: '' }))}
+                          style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="modal-actions">
+                  <button type="button" className="action-btn-sm" onClick={() => setCreateModalOpen(false)}>Cancel</button>
+                  <button type="submit" className="primary-btn">Create Channel</button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

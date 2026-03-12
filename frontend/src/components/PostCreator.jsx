@@ -7,7 +7,9 @@ import {
   FiX
 } from 'react-icons/fi';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api");
+import { getApiBaseUrl } from '../config/api';
+
+const API_BASE_URL = getApiBaseUrl();
 
 const PostCreator = ({ onPostCreated, isChannelPost = false, channelName = null }) => {
   const [postContent, setPostContent] = useState('');
@@ -25,19 +27,24 @@ const PostCreator = ({ onPostCreated, isChannelPost = false, channelName = null 
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
-    if (selectedImages.length + files.length > 4) {
-      setError('Maximum 4 images allowed per post.');
-      return;
+    const availableSlots = 4 - selectedImages.length;
+
+    if (files.length > availableSlots) {
+      setError(`You can only add up to 4 images. Adding first ${availableSlots} image(s).`);
+    } else {
+      setError('');
     }
-    files.forEach(file => {
+
+    const filesToAdd = files.slice(0, availableSlots);
+
+    filesToAdd.forEach(file => {
       if (file.size > 10 * 1024 * 1024) {
-        setError('One or more images are too large. Max 10MB each.');
+        setError(prev => prev ? prev + ' One image is too large (Max 10MB).' : 'Image too large. Max 10MB each.');
         return;
       }
       const reader = new FileReader();
       reader.onloadend = () => {
         setSelectedImages(prev => [...prev, reader.result].slice(0, 4));
-        setError('');
       };
       reader.readAsDataURL(file);
     });

@@ -159,6 +159,17 @@ export const getUserProfile = async (req, res, next) => {
           timeout: 5000
         }
       );
+
+      // Resolve relative URLs to absolute ones
+      if (data.success && data.user) {
+        if (data.user.avatarUrl && !data.user.avatarUrl.startsWith('http')) {
+          data.user.avatarUrl = `${trusted.serverUrl}${data.user.avatarUrl}`;
+        }
+        if (data.user.bannerUrl && !data.user.bannerUrl.startsWith('http')) {
+          data.user.bannerUrl = `${trusted.serverUrl}${data.user.bannerUrl}`;
+        }
+      }
+
       return res.status(200).json(data);
     } catch (error) {
       return next(createError(502, "Failed to fetch remote user profile"));
@@ -454,7 +465,7 @@ export const searchUsers = async (req, res, next) => {
 
     let users = await User.find(
       { displayName: { $regex: new RegExp(parsedQuery, 'i') } },
-      { displayName: 1, avatarUrl: 1, federatedId: 1, serverName: 1 }
+      { displayName: 1, avatarUrl: 1, serverName: 1, federatedId: 1 }
     ).limit(10);
 
     users = await enrichWithFollowStatus(users, req.user?.federatedId);
@@ -464,7 +475,8 @@ export const searchUsers = async (req, res, next) => {
       _id: u._id,
       username: u.displayName,
       profilePicture: u.avatarUrl,
-      serverName: u.serverName
+      serverName: u.serverName,
+      federatedId: u.federatedId
     }));
 
     res.status(200).json({

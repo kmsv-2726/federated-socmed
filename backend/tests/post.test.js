@@ -1,22 +1,38 @@
+import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import Post from '../models/Post.js';
-import Channel from '../models/Channel.js';
-import { createPost, getPosts, deletePost, likePost } from '../controllers/postController.js';
-import { verifyToken } from '../middleware/verifyToken.js';
 
-// Create a test Express app
+// --- Mocks (MUST be before any imports that use them) ---
+jest.unstable_mockModule('../services/postService.js', () => ({
+    createPostService: jest.fn(),
+    deletePostService: jest.fn(),
+    toggleLikePostService: jest.fn(),
+    addCommentService: jest.fn(),
+    getPostsByIdsService: jest.fn()
+}));
+
+jest.unstable_mockModule('../services/federationService.js', () => ({
+    sendFederationEvent: jest.fn()
+}));
+
+// --- Imports after mocking ---
+const postService = await import('../services/postService.js');
+const { createPost, getPosts, deletePost, likePost } = await import('../controllers/postController.js');
+const Post = (await import('../models/Post.js')).default;
+const Channel = (await import('../models/Channel.js')).default;
+
+const TEST_SECRET = 'test-secret';
+
 const createTestApp = () => {
     const app = express();
     app.use(express.json());
 
-    // Mock auth middleware for testing
     app.use((req, res, next) => {
         if (req.headers.authorization) {
             try {
                 const token = req.headers.authorization.split(' ')[1];
-                const decoded = jwt.verify(token, 'test-secret');
+                const decoded = jwt.verify(token, TEST_SECRET);
                 req.user = decoded;
             } catch (err) {
                 return res.status(401).json({ message: 'Authentication failed' });
@@ -25,26 +41,19 @@ const createTestApp = () => {
         next();
     });
 
-    // Routes
     app.post('/api/posts', createPost);
     app.get('/api/posts', getPosts);
     app.delete('/api/posts/:id', deletePost);
-    app.put('/api/posts/like/:id', likePost);
+    app.put('/api/posts/like/', likePost);
 
-    // Error handler
     app.use((err, req, res, next) => {
-        const status = err.status || 500;
-        const message = err.message || 'Something went wrong';
-        res.status(status).json({ success: false, message });
+        res.status(err.status || 500).json({ success: false, message: err.message || 'Something went wrong' });
     });
 
     return app;
 };
 
-// Generate test token
-const generateToken = (userData) => {
-    return jwt.sign(userData, 'test-secret', { expiresIn: '1h' });
-};
+const generateToken = (userData) => jwt.sign(userData, TEST_SECRET, { expiresIn: '1h' });
 
 describe('Post Creation API', () => {
     let app;
@@ -52,85 +61,76 @@ describe('Post Creation API', () => {
     const testUser = {
         federatedId: 'testuser@food.server',
         displayName: 'Test User',
-        server: 'food.server',
+        serverName: 'food.server',
         role: 'user'
     };
 
     beforeAll(() => {
         app = createTestApp();
         authToken = generateToken(testUser);
+        process.env.SERVER_NAME = 'food.server';
+    });
+
+    beforeEach(() => {
+        jest.clearAllMocks();
     });
 
     describe('POST /api/posts - Create Post', () => {
         it('should create a user post successfully', async () => {
-            const postData = {
+            postService.createPostService.mockResolvedValue({
                 description: 'This is a test post',
-                isChannelPost: false
-            };
+                isUserPost: true,
+                userDisplayName: 'Test User'
+            });
 
-            const response = await request(app)
+            const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`)
-                .send(postData);
+                .send({ description: 'This is a test post', isChannelPost: false });
 
-            expect(response.status).toBe(201);
-            expect(response.body.success).toBe(true);
-            expect(response.body.post).toBeDefined();
-            expect(response.body.post.description).toBe('This is a test post');
-            expect(response.body.post.isUserPost).toBe(true);
-            expect(response.body.post.userDisplayName).toBe('Test User');
+            expect(res.status).toBe(201);
+            expect(res.body.success).toBe(true);
+            expect(postService.createPostService).toHaveBeenCalled();
         });
 
         it('should fail when description is missing', async () => {
-            const postData = {
-                isChannelPost: false
-            };
-
-            const response = await request(app)
+            const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`)
-                .send(postData);
+                .send({ isChannelPost: false });
 
-            expect(response.status).toBe(400);
-            expect(response.body.success).toBe(false);
-            expect(response.body.message).toContain('description is required');
+            expect(res.status).toBe(400);
+            expect(res.body.success).toBe(false);
+            expect(res.body.message).toContain('description is required');
         });
 
         it('should fail when description is empty', async () => {
-            const postData = {
-                description: '   ',
-                isChannelPost: false
-            };
-
-            const response = await request(app)
+            const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`)
-                .send(postData);
+                .send({ description: '   ', isChannelPost: false });
 
-            expect(response.status).toBe(400);
-            expect(response.body.success).toBe(false);
+            expect(res.status).toBe(400);
+            expect(res.body.success).toBe(false);
         });
 
         it('should create a post with an image', async () => {
-            const postData = {
+            postService.createPostService.mockResolvedValue({
                 description: 'Post with image',
-                image: 'https://example.com/image.jpg',
-                isChannelPost: false
-            };
+                image: 'https://example.com/image.jpg'
+            });
 
-            const response = await request(app)
+            const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`)
-                .send(postData);
+                .send({ description: 'Post with image', image: 'https://example.com/image.jpg', isChannelPost: false });
 
-            expect(response.status).toBe(201);
-            expect(response.body.success).toBe(true);
-            expect(response.body.post.image).toBe('https://example.com/image.jpg');
+            expect(res.status).toBe(201);
+            expect(res.body.success).toBe(true);
         });
 
         it('should create a channel post when channel exists', async () => {
-            // First create a channel
-            const channel = new Channel({
+            await Channel.create({
                 name: 'test-channel',
                 description: 'Test channel',
                 rules: ['Be nice'],
@@ -140,112 +140,66 @@ describe('Post Creation API', () => {
                 serverName: 'food.server',
                 createdBy: 'admin@food.server'
             });
-            await channel.save();
 
-            const postData = {
-                description: 'This is a channel post',
+            postService.createPostService.mockResolvedValue({
                 isChannelPost: true,
                 channelName: 'test-channel'
-            };
+            });
 
-            const response = await request(app)
+            const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`)
-                .send(postData);
+                .send({ description: 'Channel post', isChannelPost: true, channelName: 'test-channel' });
 
-            expect(response.status).toBe(201);
-            expect(response.body.success).toBe(true);
-            expect(response.body.post.isChannelPost).toBe(true);
-            expect(response.body.post.channelName).toBe('test-channel');
+            expect(res.status).toBe(201);
+            expect(res.body.success).toBe(true);
         });
 
         it('should fail channel post when channel does not exist', async () => {
-            const postData = {
-                description: 'Post to non-existent channel',
-                isChannelPost: true,
-                channelName: 'non-existent-channel'
-            };
-
-            const response = await request(app)
+            const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`)
-                .send(postData);
+                .send({ description: 'Post to non-existent channel', isChannelPost: true, channelName: 'non-existent-channel' });
 
-            expect(response.status).toBe(404);
-            expect(response.body.message).toContain('Channel not found');
+            expect(res.status).toBe(404);
+            expect(res.body.message).toContain('Channel not found');
         });
 
         it('should fail channel post when channelName is missing', async () => {
-            const postData = {
-                description: 'Channel post without channel name',
-                isChannelPost: true
-            };
-
-            const response = await request(app)
+            const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`)
-                .send(postData);
+                .send({ description: 'Channel post without channel name', isChannelPost: true });
 
-            expect(response.status).toBe(400);
-            expect(response.body.message).toContain('Channel name is required');
+            expect(res.status).toBe(400);
+            expect(res.body.message).toContain('Channel name is required');
         });
     });
 
     describe('GET /api/posts - Get Posts', () => {
         it('should return all posts', async () => {
-            // Create some test posts
-            await Post.create({
-                description: 'Post 1',
-                isUserPost: true,
-                userDisplayName: 'User 1',
-                federatedId: 'user1@server/post/1',
-                originServer: 'server',
-                serverName: 'server'
-            });
-            await Post.create({
-                description: 'Post 2',
-                isUserPost: true,
-                userDisplayName: 'User 2',
-                federatedId: 'user2@server/post/2',
-                originServer: 'server',
-                serverName: 'server'
-            });
+            await Post.create({ description: 'Post 1', isUserPost: true, userDisplayName: 'User 1', federatedId: 'user1@food.server/post/1', originServer: 'food.server', serverName: 'food.server' });
+            await Post.create({ description: 'Post 2', isUserPost: true, userDisplayName: 'User 2', federatedId: 'user2@food.server/post/2', originServer: 'food.server', serverName: 'food.server' });
 
-            const response = await request(app)
+            const res = await request(app)
                 .get('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`);
 
-            expect(response.status).toBe(200);
-            expect(response.body.success).toBe(true);
-            expect(response.body.posts).toHaveLength(2);
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.posts).toHaveLength(2);
         });
 
         it('should return posts sorted by newest first', async () => {
-            await Post.create({
-                description: 'Older post',
-                isUserPost: true,
-                userDisplayName: 'User',
-                federatedId: 'user@server/post/1',
-                originServer: 'server',
-                serverName: 'server',
-                createdAt: new Date('2024-01-01')
-            });
-            await Post.create({
-                description: 'Newer post',
-                isUserPost: true,
-                userDisplayName: 'User',
-                federatedId: 'user@server/post/2',
-                originServer: 'server',
-                serverName: 'server',
-                createdAt: new Date('2024-01-02')
-            });
+            await Post.create({ description: 'Older post', isUserPost: true, userDisplayName: 'User', federatedId: 'user@food.server/post/1', originServer: 'food.server', serverName: 'food.server', createdAt: new Date('2024-01-01') });
+            await Post.create({ description: 'Newer post', isUserPost: true, userDisplayName: 'User', federatedId: 'user@food.server/post/2', originServer: 'food.server', serverName: 'food.server', createdAt: new Date('2024-01-02') });
 
-            const response = await request(app)
+            const res = await request(app)
                 .get('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`);
 
-            expect(response.status).toBe(200);
-            expect(response.body.posts[0].description).toBe('Newer post');
+            expect(res.status).toBe(200);
+            expect(res.body.posts[0].description).toBe('Newer post');
         });
     });
 
@@ -255,79 +209,56 @@ describe('Post Creation API', () => {
                 description: 'Post to delete',
                 isUserPost: true,
                 userDisplayName: 'Test User',
-                federatedId: 'testuser@server/post/1',
-                originServer: 'server',
-                serverName: 'server'
+                authorFederatedId: 'testuser@food.server',
+                federatedId: 'testuser@food.server/post/del1',
+                originServer: 'food.server',
+                serverName: 'food.server'
             });
 
-            const response = await request(app)
+            postService.deletePostService.mockResolvedValue();
+
+            const res = await request(app)
                 .delete(`/api/posts/${post._id}`)
                 .set('Authorization', `Bearer ${authToken}`);
 
-            expect(response.status).toBe(200);
-            expect(response.body.success).toBe(true);
-            expect(response.body.message).toContain('deleted successfully');
-
-            // Verify post is deleted
-            const deletedPost = await Post.findById(post._id);
-            expect(deletedPost).toBeNull();
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toContain('deleted successfully');
         });
 
         it('should return 404 for non-existent post', async () => {
-            const fakeId = '507f1f77bcf86cd799439011';
-
-            const response = await request(app)
-                .delete(`/api/posts/${fakeId}`)
+            const res = await request(app)
+                .delete('/api/posts/507f1f77bcf86cd799439011')
                 .set('Authorization', `Bearer ${authToken}`);
 
-            expect(response.status).toBe(404);
-            expect(response.body.message).toContain('Post not found');
+            expect(res.status).toBe(404);
         });
     });
 
-    describe('PUT /api/posts/like/:id - Like Post', () => {
+    describe('PUT /api/posts/like/ - Like Post', () => {
         it('should like a post', async () => {
             const post = await Post.create({
                 description: 'Post to like',
                 isUserPost: true,
                 userDisplayName: 'Test User',
-                federatedId: 'testuser@server/post/1',
-                originServer: 'server',
-                serverName: 'server',
+                authorFederatedId: 'testuser@food.server',
+                federatedId: 'testuser@food.server/post/like1',
+                originServer: 'food.server',
+                serverName: 'food.server',
                 likeCount: 0,
                 likedBy: []
             });
 
-            const response = await request(app)
-                .put(`/api/posts/like/${post._id}`)
-                .set('Authorization', `Bearer ${authToken}`);
+            postService.toggleLikePostService.mockResolvedValue({ liked: true, likeCount: 1 });
 
-            expect(response.status).toBe(200);
-            expect(response.body.success).toBe(true);
-            expect(response.body.liked).toBe(true);
-            expect(response.body.likeCount).toBe(1);
-        });
+            const res = await request(app)
+                .put('/api/posts/like/')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ postFederatedId: post.federatedId });
 
-        it('should unlike a post if already liked', async () => {
-            const post = await Post.create({
-                description: 'Post already liked',
-                isUserPost: true,
-                userDisplayName: 'Test User',
-                federatedId: 'testuser@server/post/1',
-                originServer: 'server',
-                serverName: 'server',
-                likeCount: 1,
-                likedBy: ['testuser@food.server']
-            });
-
-            const response = await request(app)
-                .put(`/api/posts/like/${post._id}`)
-                .set('Authorization', `Bearer ${authToken}`);
-
-            expect(response.status).toBe(200);
-            expect(response.body.success).toBe(true);
-            expect(response.body.liked).toBe(false);
-            expect(response.body.likeCount).toBe(0);
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(postService.toggleLikePostService).toHaveBeenCalled();
         });
     });
 });

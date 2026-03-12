@@ -1,16 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiThumbsUp, FiMessageCircle, FiShare2, FiMoreHorizontal, FiTrash2, FiSend, FiChevronUp, FiChevronDown } from 'react-icons/fi';
+import { useNavigate } from 'react-router-dom';
+import { FiThumbsUp, FiMessageCircle, FiRepeat, FiMoreHorizontal, FiTrash2, FiSend, FiChevronUp, FiChevronDown, FiVolumeX } from 'react-icons/fi';
 
-const API_BASE_URL = "http://localhost:5000/api";
+import { getApiBaseUrl } from '../config/api';
 
-const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
+const API_BASE_URL = getApiBaseUrl();
+
+const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onRepostSuccess, onMuteUser }) => {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [openCommentsId, setOpenCommentsId] = useState(null);
   const [commentInputs, setCommentInputs] = useState({});   // { postId: string }
   const [commentLoading, setCommentLoading] = useState({}); // { postId: bool }
   const [localComments, setLocalComments] = useState({});   // { postId: [comment, ...] }
+  const [localLikes, setLocalLikes] = useState({});         // { postId: { count, liked, loading } }
+  const [repostLoading, setRepostLoading] = useState({});   // { postId: bool }
   const menuRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
@@ -31,6 +37,24 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
       posts.forEach(post => {
         if (!next[post._id]) {
           next[post._id] = Array.isArray(post.comments) ? post.comments : [];
+        }
+      });
+      return next;
+    });
+    setLocalLikes(prev => {
+      const next = { ...prev };
+      posts.forEach(post => {
+        if (!next[post._id]) {
+          const currentFederatedId = (() => {
+            try { return JSON.parse(localStorage.getItem('user'))?.federatedId; } catch { return null; }
+          })();
+          next[post._id] = {
+            count: post.likeCount || post.likes || 0,
+            liked: Array.isArray(post.likedBy) && currentFederatedId
+              ? post.likedBy.includes(currentFederatedId)
+              : false,
+            loading: false
+          };
         }
       });
       return next;
@@ -115,6 +139,94 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
     }
   };
 
+  const handleLike = async (post) => {
+    if (localLikes[post._id]?.loading) return;
+
+    const current = localLikes[post._id] || { count: 0, liked: false };
+    const optimisticLiked = !current.liked;
+    const optimisticCount = optimisticLiked ? current.count + 1 : Math.max(0, current.count - 1);
+
+    // Optimistic update
+    setLocalLikes(prev => ({
+      ...prev,
+      [post._id]: { count: optimisticCount, liked: optimisticLiked, loading: true }
+    }));
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/posts/like/`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ postFederatedId: post.federatedId })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setLocalLikes(prev => ({
+          ...prev,
+          [post._id]: {
+            count: data.likeCount ?? optimisticCount,
+            liked: data.liked ?? optimisticLiked,
+            loading: false
+          }
+        }));
+        // Notify parent if provided
+        if (onLike) onLike(post._id);
+      } else {
+        // Revert on failure
+        setLocalLikes(prev => ({
+          ...prev,
+          [post._id]: { ...current, loading: false }
+        }));
+      }
+    } catch (err) {
+      console.error('Error liking post:', err);
+      // Revert on error
+      setLocalLikes(prev => ({
+        ...prev,
+        [post._id]: { ...current, loading: false }
+      }));
+    }
+  };
+
+  const handleRepost = async (post) => {
+    if (repostLoading[post._id]) return;
+
+    setRepostLoading(prev => ({ ...prev, [post._id]: true }));
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/posts/repost`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ postFederatedId: post.federatedId })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert('Post reposted successfully!');
+        if (onRepostSuccess) {
+          onRepostSuccess(data.post);
+        }
+      } else {
+        alert(data.message || 'Failed to repost');
+      }
+    } catch (err) {
+      console.error('Error reposting:', err);
+      alert('Failed to repost. Please try again.');
+    } finally {
+      setRepostLoading(prev => ({ ...prev, [post._id]: false }));
+    }
+  };
+
   const handleDelete = async (postId) => {
     if (!window.confirm('Are you sure you want to delete this post?')) return;
 
@@ -140,11 +252,55 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
     }
   };
 
+  const handleMute = async (post) => {
+    if (!window.confirm(`Are you sure you want to mute ${post.userDisplayName || post.author}? Their posts will no longer appear in your timeline.`)) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      // The federatedId is usually authorFederatedId. Fall back if not present.
+      const targetFedId = post.authorFederatedId || post.federatedId.split('/post/')[0];
+
+      const response = await fetch(`${API_BASE_URL}/mutes/${targetFedId}/toggle`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        if (onMuteUser) {
+          onMuteUser(targetFedId);
+        }
+        setOpenMenuId(null);
+        alert(data.message);
+      } else {
+        alert(data.message || 'Failed to mute user');
+      }
+    } catch (err) {
+      console.error('Error muting user:', err);
+      alert('Failed to mute user. Please try again.');
+    }
+  };
+
   const isOwnPost = (post) => {
     if (!currentUser) return false;
     if (currentUser.role === 'admin') return true;
     return post.federatedId?.includes(currentUser.federatedId) ||
-      post.userDisplayName === currentUser.displayName;
+      post.userDisplayName === currentUser.displayName ||
+      post.author === currentUser.displayName;
+  };
+
+  const isActuallyOwnPost = (post) => {
+    if (!currentUser) return false;
+    return post.federatedId?.includes(currentUser.federatedId) ||
+      post.userDisplayName === currentUser.displayName ||
+      post.author === currentUser.displayName;
+  };
+
+  const handleNavigateToProfile = (federatedId) => {
+    if (!federatedId) return;
+    navigate(`/user/${encodeURIComponent(federatedId)}`);
   };
 
   const formatTime = (date) => {
@@ -179,12 +335,22 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
         const comments = localComments[post._id] || [];
         const commentCount = comments.length;
         const isCommentsOpen = openCommentsId === post._id;
+        const likeData = localLikes[post._id] || { count: post.likeCount || 0, liked: false, loading: false };
+        const isReposting = repostLoading[post._id];
 
         return (
           <div key={post._id} className="post">
+            {/* ── Repost Header ── */}
+            {post.isRepost && (
+              <div className="repost-header">
+                <FiRepeat className="repost-icon" />
+                <span>{post.userDisplayName || 'Someone'} reposted</span>
+              </div>
+            )}
+
             {/* ── Header ── */}
             <div className="post-header">
-              <div className="post-author">
+              <div className="post-author" onClick={() => handleNavigateToProfile(post.authorFederatedId)} style={{ cursor: 'pointer' }}>
                 <div className="user-avatar">
                   {getInitials(post.userDisplayName || post.author)}
                 </div>
@@ -197,8 +363,12 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
                   </div>
                   <div className="post-time">
                     {formatTime(post.createdAt)}
-                    {post.serverName && (
-                      <span className="post-server-tag"> • {post.serverName}</span>
+                    {post.isRemote && (
+                      <span className="post-server-tag">
+                        {' • '}{post.isChannelPost && post.channelName
+                          ? `${post.channelName}@${post.originServer}`
+                          : post.authorFederatedId || `${post.userDisplayName || post.author}@${post.originServer}`}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -227,8 +397,13 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
                         <FiTrash2 /> Delete Post
                       </button>
                     )}
-                    {!isOwnPost(post) && (
-                      <div className="dropdown-item disabled">No actions available</div>
+                    {!isActuallyOwnPost(post) && (
+                      <button
+                        className="dropdown-item"
+                        onClick={() => handleMute(post)}
+                      >
+                        <FiVolumeX /> Mute User
+                      </button>
                     )}
                   </div>
                 )}
@@ -238,7 +413,15 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
             {/* ── Content ── */}
             <div className="post-content">{post.description || post.content}</div>
 
-            {post.image && (
+            {post.images && post.images.length > 0 ? (
+              <div className="image-preview-grid">
+                {post.images.map((img, idx) => (
+                  <div key={idx} className="image-preview-item">
+                    <img src={img} alt={`Post attachment ${idx + 1}`} className="preview-image" />
+                  </div>
+                ))}
+              </div>
+            ) : post.image && (
               <div className="post-images">
                 <img src={post.image} alt="" />
               </div>
@@ -246,11 +429,15 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
 
             {/* ── Footer ── */}
             <div className="post-footer">
-              <button className="post-action" onClick={() => onLike(post._id)}>
+              <button
+                className={`post-action${likeData.liked ? ' liked' : ''}`}
+                onClick={() => handleLike(post)}
+                disabled={likeData.loading}
+              >
                 <FiThumbsUp className="action-icon" />
-                <span>Like</span>
-                {(post.likeCount > 0 || post.likes > 0) && (
-                  <span className="count">{post.likeCount || post.likes}</span>
+                <span>{likeData.liked ? 'Liked' : 'Like'}</span>
+                {likeData.count > 0 && (
+                  <span className="count">{likeData.count}</span>
                 )}
               </button>
 
@@ -264,10 +451,13 @@ const PostList = ({ posts, onLike, activeTimeline, onDeletePost }) => {
                 }
               </button>
 
-              <button className="post-action">
-                <FiShare2 className="action-icon" />
-                <span>Share</span>
-                {post.shares > 0 && <span className="count">{post.shares}</span>}
+              <button
+                className="post-action"
+                onClick={() => handleRepost(post)}
+                disabled={isReposting}
+              >
+                <FiRepeat className={`action-icon ${isReposting ? 'animate-spin' : ''}`} />
+                <span>{isReposting ? 'Reposting...' : 'Repost'}</span>
               </button>
             </div>
 

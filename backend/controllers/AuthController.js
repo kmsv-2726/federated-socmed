@@ -53,6 +53,7 @@ export const loginUser = async (req, res, next) => {
         id: user._id,
         displayName: user.displayName,
         image: user.avatarUrl,
+        bannerUrl: user.bannerUrl,
         email: user.email,
         role: user.role,
         federatedId: user.federatedId,
@@ -126,7 +127,8 @@ export const registerUser = async (req, res, next) => {
         role: newUser.role,
         federatedId: newUser.federatedId,
         serverName: newUser.serverName,
-        image: null
+        image: newUser.avatarUrl,
+        bannerUrl: newUser.bannerUrl
       }
     });
   } catch (err) {

@@ -20,6 +20,7 @@ export const servers = [
         description: 'Share recipes, restaurant recommendations, and connect with fellow food lovers.',
         enabled: true,
         users: '95K+',
+        apiUrl: 'http://localhost:5000/api',
         image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
     },
     {
@@ -27,8 +28,9 @@ export const servers = [
         name: 'sports',
         category: 'sports',
         description: 'Discuss your favorite sports, teams, and athletic adventures with fans worldwide.',
-        enabled: false,
-        users: 'Coming Soon',
+        enabled: true,
+        users: '80K+',
+        apiUrl: 'http://localhost:5001/api',
         image: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
     },
     {

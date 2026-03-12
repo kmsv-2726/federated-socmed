@@ -93,7 +93,7 @@ export const unfollowUserService = async (
 export const getUserProfileService = async (federatedId) => {
   const user = await User.findOne(
     { federatedId },
-    { displayName: 1, avatarUrl: 1, federatedId: 1, followersCount: 1, followingCount: 1 }
+    { displayName: 1, avatarUrl: 1, bannerUrl: 1, federatedId: 1, followersCount: 1, followingCount: 1, originServer: 1, createdAt: 1 }
   );
   if (!user) throw createError(404, "User not found");
   return user;

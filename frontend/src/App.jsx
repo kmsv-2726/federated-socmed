@@ -22,7 +22,7 @@ const isAuthenticated = () => {
 
 const ProtectedRoute = ({ children }) => {
     if (!isAuthenticated()) {
-        return <Navigate to="/auth" replace />;
+        return <Navigate to="/landing" replace />;
     }
     return children;
 };
@@ -37,6 +37,8 @@ const PublicRoute = ({ children }) => {
 function App() {
     return (
         <Routes>
+            <Route path="/landing" element={<LandingPage />} />
+            <Route path="/servers" element={<ServerHome />} />
             <Route path="/auth" element={
                 <PublicRoute>
                     <AuthPage />

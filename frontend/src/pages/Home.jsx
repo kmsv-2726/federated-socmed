@@ -6,7 +6,9 @@ import SearchUsers from '../components/SearchUsers';
 import Layout from '../components/Layout';
 import '../styles/Home.css';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api");
+import { getApiBaseUrl } from '../config/api';
+
+const API_BASE_URL = getApiBaseUrl();
 
 function Home() {
   const [activeTimeline, setActiveTimeline] = useState('home');
@@ -124,6 +126,20 @@ function Home() {
     setFollowingPosts(followingPosts.filter(p => p._id !== postId));
   };
 
+  const handleMuteUser = (mutedFederatedId) => {
+    // Filter out posts from both timelines where the author's federatedId matches the muted one
+    // Some posts might have `authorFederatedId`, others might use `federatedId` split
+    setPosts(posts.filter(p => {
+      const targetFedId = p.authorFederatedId || (p.federatedId && p.federatedId.split('/post/')[0]);
+      return targetFedId !== mutedFederatedId;
+    }));
+
+    setFollowingPosts(followingPosts.filter(p => {
+      const targetFedId = p.authorFederatedId || (p.federatedId && p.federatedId.split('/post/')[0]);
+      return targetFedId !== mutedFederatedId;
+    }));
+  };
+
   const getFilteredPosts = () => {
     // Return all posts since filtering is now handled by the server endpoints
     return posts;
@@ -150,7 +166,9 @@ function Home() {
           onLike={handleLikePost}
           activeTimeline={activeTimeline}
           onDeletePost={handleDeletePost}
+          onRepostSuccess={handlePostCreated}
           onFollowChanged={fetchFollowingPosts}
+          onMuteUser={handleMuteUser}
         />
       )}
     </Layout>

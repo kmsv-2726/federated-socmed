@@ -92,9 +92,12 @@ export const unfollowUserService = async (
  * Used by userController (local views) and federationFeedController (remote views).
  */
 export const getUserProfileService = async (federatedId) => {
-  const userProfile = await User.findOne({ federatedId }).select("-password");
-  if (!userProfile) throw createError(404, "User not found");
-  return userProfile;
+  const user = await User.findOne(
+    { federatedId },
+    { displayName: 1, avatarUrl: 1, bannerUrl: 1, federatedId: 1, followersCount: 1, followingCount: 1, originServer: 1, createdAt: 1 }
+  );
+  if (!user) throw createError(404, "User not found");
+  return user;
 };
 
 // ── Search & Discovery Logic ──────────────────

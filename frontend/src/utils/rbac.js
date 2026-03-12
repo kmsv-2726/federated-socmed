@@ -66,9 +66,9 @@ export const canPostInChannel = (user, channel, isFollowing) => {
  */
 export const canViewChannelContent = (user, channel, isFollowing) => {
   if (!channel) return false;
-  
+
   const role = user?.role || ROLES.USER;
-  
+
   // Admins can see everything
   if (role === ROLES.ADMIN) return true;
 

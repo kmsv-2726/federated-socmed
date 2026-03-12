@@ -10,6 +10,7 @@ import {
 import { sendFederationEvent } from "../services/federationService.js";
 import UserFollow from "../models/UserFollow.js";
 import ChannelFollow from "../models/ChannelFollow.js";
+import UserMute from "../models/UserMute.js";
 import TrustedServer from "../models/TrustedServer.js";
 import axios from "axios";
 
@@ -69,6 +70,7 @@ export const createPost = async (req, res, next) => {
             data: {
               description: description.trim(),
               image,
+              images,
               isChannelPost: true,
               channelName: name,
               userDisplayName: req.user.displayName,
@@ -86,6 +88,7 @@ export const createPost = async (req, res, next) => {
           const savedPost = await createPostService({
             description: description.trim(),
             image,
+            images,
             isUserPost: false,
             userDisplayName: req.user.displayName,
             authorFederatedId: req.user.federatedId,
@@ -119,8 +122,8 @@ export const createPost = async (req, res, next) => {
     // Local Case: User Post or Local Channel Post
     const savedPost = await createPostService({
       description: description.trim(),
-      image: imageList.length > 0 ? imageList[0] : null,
-      images: imageList,
+      image,
+      images,
       isUserPost,
       userDisplayName: req.user.displayName,
       authorFederatedId: req.user.federatedId,
@@ -247,6 +250,17 @@ export const getPosts = async (req, res, next) => {
     const query = {};
     if (authorFederatedId) {
       query.authorFederatedId = authorFederatedId;
+    }
+
+    // Filter out posts from users the current user has muted
+    if (req.user && req.user.federatedId) {
+      const mutes = await UserMute.find({ muterFederatedId: req.user.federatedId });
+      if (mutes.length > 0) {
+        const mutedIds = mutes.map(m => m.mutedFederatedId);
+        query.authorFederatedId = query.authorFederatedId
+          ? { $eq: query.authorFederatedId, $nin: mutedIds }
+          : { $nin: mutedIds };
+      }
     }
 
     const posts = await Post.find(query).sort({ createdAt: -1 });
@@ -383,6 +397,7 @@ export const repostPost = async (req, res, next) => {
     const savedRepost = await createPostService({
       description: originalPost.description,
       image: originalPost.image,
+      images: originalPost.images,
       isUserPost: true,
       userDisplayName: req.user.displayName,
       authorFederatedId: req.user.federatedId,
@@ -420,17 +435,22 @@ export const getTimeline = async (req, res, next) => {
   try {
     const userId = req.user.federatedId;
 
-    // ── 1. Fetch all follow relationships for this user ──────────────────────
-    const [userFollows, channelFollows] = await Promise.all([
+    // ── 1. Fetch all follow relationships and mutes for this user ──────────────────────
+    const [userFollows, channelFollows, userMutes] = await Promise.all([
       UserFollow.find({ followerFederatedId: userId }),
-      ChannelFollow.find({ userFederatedId: userId })
+      ChannelFollow.find({ userFederatedId: userId }),
+      UserMute.find({ muterFederatedId: userId })
     ]);
+
+    const mutedFederatedIds = new Set(userMutes.map(m => m.mutedFederatedId));
 
     // ── 2. Split into local vs remote ────────────────────────────────────────
     const localUserIds = [];
     const remoteUserMap = {}; // { serverName: [federatedId, ...] }
 
     for (const f of userFollows) {
+      if (mutedFederatedIds.has(f.followingFederatedId)) continue; // skip if muted
+
       if (f.followingOriginServer === process.env.SERVER_NAME) {
         localUserIds.push(f.followingFederatedId);
       } else {
