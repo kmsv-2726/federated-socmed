@@ -35,6 +35,11 @@ const channelFollowSchema = new mongoose.Schema(
     isRemote: {
       type: Boolean,
       default: false
+    },
+    status: {
+      type: String,
+      enum: ['active', 'pending'],
+      default: 'active'
     }
   },
   { timestamps: true }

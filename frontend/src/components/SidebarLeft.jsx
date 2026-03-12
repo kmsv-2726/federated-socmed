@@ -8,8 +8,7 @@ import {
   FiServer,
   FiLogOut,
   FiShield,
-  FiHelpCircle,
-  FiSearch
+  FiHelpCircle
 } from 'react-icons/fi';
 import axios from 'axios';
 
@@ -42,17 +41,7 @@ const SidebarLeft = () => {
     return location.pathname === path;
   };
 
-  const handleLogout = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        await axios.post(`${API_BASE_URL}/auth/logout`, {}, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-      }
-    } catch (err) {
-      console.error('Logout error:', err);
-    }
+  const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     navigate('/auth');
@@ -70,12 +59,6 @@ const SidebarLeft = () => {
           <FiHome className="icon" /> Home
         </button>
 
-        <button
-          className={`nav-item ${isActive('/search') ? 'active' : ''}`}
-          onClick={() => handleNavClick('/search')}
-        >
-          <FiSearch className="icon" /> Search
-        </button>
         <button
           className={`nav-item ${isActive('/profile') ? 'active' : ''}`}
           onClick={() => handleNavClick('/profile')}

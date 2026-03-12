@@ -6,7 +6,7 @@ export const getServerConfig = async (req, res, next) => {
     try {
         let config = await ServerConfig.findOne({ serverName: process.env.SERVER_NAME });
 
-        // If somehow not initialized, return a default dynamically
+        // If somehow not initialized
         if (!config) {
             config = new ServerConfig({ serverName: process.env.SERVER_NAME });
             await config.save();

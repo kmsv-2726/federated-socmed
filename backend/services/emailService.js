@@ -3,8 +3,8 @@ import nodemailer from "nodemailer";
 const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
-        user: "federatedsocialnetwork@gmail.com",
-        pass: "hbwe nvoo lrlu qfrp"
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
     }
 });
 
@@ -12,7 +12,7 @@ export const sendUnlockEmail = async (recipientEmail, unlockToken) => {
     const unlockLink = `http://localhost:5173/unlock-account?token=${unlockToken}`;
 
     const mailOptions = {
-        from: "federatedsocialnetwork@gmail.com",
+        from: process.env.EMAIL_USER,
         to: recipientEmail,
         subject: "Security Alert: Your Account Has Been Locked",
         html: `

@@ -52,7 +52,7 @@ function Profile() {
   const fetchUserPosts = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/posts?authorFederatedId=${encodeURIComponent(user?.federatedId)}`, {
+      const res = await fetch(`${API_BASE_URL}/posts/users?authorFederatedId=${encodeURIComponent(user?.federatedId)}`, {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${token}` }
       });

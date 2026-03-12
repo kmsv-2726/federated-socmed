@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../Layout';
-import { FiHash, FiLock, FiUsers } from 'react-icons/fi';
+import { FiHash, FiLock, FiUsers, FiSearch, FiX, FiGlobe, FiHome as FiLocal, FiAlertCircle } from 'react-icons/fi';
 import axios from 'axios';
 import '../../styles/Channels.css';
 
@@ -17,6 +17,10 @@ function Channels() {
   const [requestStatuses, setRequestStatuses] = useState({}); // { channelName: "none"|"pending"|"rejected" }
   const [activeFilter, setActiveFilter] = useState('all');
   const [query, setQuery] = useState('');
+  const [searchMeta, setSearchMeta] = useState(null);
+  const [hasSearched, setHasSearched] = useState(false);
+  const debounceRef = React.useRef(null);
+  const inputRef = React.useRef(null);
 
   const userStr = localStorage.getItem('user');
   let isAdmin = false;
@@ -55,15 +59,41 @@ function Channels() {
     }
   }, []);
 
-  const fetchChannels = useCallback(async () => {
+  const fetchChannels = useCallback(async (searchQuery = '') => {
     try {
+      setLoading(true);
+      setError('');
+      // Reset search meta when a new search starts
+      if (searchQuery.trim()) {
+        setSearchMeta(null);
+      }
+      
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_BASE_URL}/channels`, {
+      
+      // Use the new federated search endpoint if a query is provided
+      const url = searchQuery.trim() 
+        ? `${API_BASE_URL}/channels/${encodeURIComponent(searchQuery.trim())}`
+        : `${API_BASE_URL}/channels`;
+
+      const response = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.data.success) {
         const base = response.data.channels || [];
         setChannels(base);
+        
+        if (searchQuery.trim()) {
+          setHasSearched(true);
+          setSearchMeta({
+            searchType: searchQuery.includes('@') ? 'remote' : 'local',
+            count: base.length,
+            query: searchQuery
+          });
+        } else {
+          setHasSearched(false);
+          setSearchMeta(null);
+        }
+
         base.forEach(channel => {
           checkFollowStatus(channel.name);
           if (channel.visibility === 'private') {
@@ -78,6 +108,27 @@ function Channels() {
       setLoading(false);
     }
   }, [checkFollowStatus, checkRequestStatus]);
+
+  // Handle debounced search
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    
+    if (query.trim()) {
+      debounceRef.current = setTimeout(() => {
+        fetchChannels(query);
+      }, 400);
+    } else {
+      // If query is cleared, fetch all local channels (default behavior)
+      fetchChannels();
+    }
+    
+    return () => clearTimeout(debounceRef.current);
+  }, [query, fetchChannels]);
+
+  const clearSearch = () => {
+    setQuery('');
+    inputRef.current?.focus();
+  };
 
   useEffect(() => {
     fetchChannels();
@@ -110,7 +161,7 @@ function Channels() {
         });
       }
       setFollowingChannels(prev => ({ ...prev, [channelName]: !isFollowing }));
-      fetchChannels();
+      fetchChannels(query);
     } catch (err) {
       console.error(err);
     }
@@ -152,16 +203,38 @@ function Channels() {
       <div className="channels-container">
         <div className="channels-header">
           <h1>Explore Communities</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search favorite communities..."
-              style={{ width: '340px', padding: '10px 12px', borderRadius: '10px', border: '1px solid #e5e7eb' }}
-            />
+          <div className="channels-search-wrapper">
+            <div className="search-input-wrapper" style={{ margin: 0 }}>
+              <FiSearch className="search-icon" />
+              <input
+                ref={inputRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search favorite communities..."
+                className="search-input"
+                autoComplete="off"
+              />
+              {query && (
+                <button className="search-clear-btn" onClick={clearSearch}>
+                  <FiX />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
+        {/* Search meta info */}
+        {searchMeta && !loading && (
+          <div className="search-meta" style={{ marginBottom: '20px' }}>
+            <span className={`search-type-badge ${searchMeta.searchType}`}>
+              {searchMeta.searchType === 'local' ? <FiLocal size={12} /> : <FiGlobe size={12} />}
+              {searchMeta.searchType === 'local' ? 'Local Search' : 'Remote Search'}
+            </span>
+            <span className="search-count">
+              {searchMeta.count} {searchMeta.count === 1 ? 'result' : 'results'} found
+            </span>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: '18px', marginBottom: '18px', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px' }}>
           {['all', 'public', 'joined', 'private', 'read-only'].map(f => (
             <button
@@ -179,6 +252,13 @@ function Channels() {
             </button>
           ))}
         </div>
+
+        {error && (
+          <div className="search-error" style={{ marginBottom: '20px' }}>
+            <FiAlertCircle />
+            <span>{error}</span>
+          </div>
+        )}
 
         <div className="channels-grid">
           {filtered.map(channel => {

@@ -17,7 +17,8 @@ import ServerConfig from "./models/ServerConfig.js"
 import muteRoute from "./routes/muteRoute.js"
 import blockRoute from "./routes/blockRoute.js"
 import searchRoute from "./routes/searchRoute.js"
-
+import serverRoute from "./routes/serverRoute.js"
+import activityRoute from "./routes/activityRoute.js"
 dotenv.config()
 
 const app = express()
@@ -71,6 +72,8 @@ app.use("/api/messages", messageRoute)
 app.use("/api/mutes", muteRoute)
 app.use("/api/blocks", blockRoute)
 app.use("/api/search", searchRoute)
+app.use("/api/servers", serverRoute)
+app.use("/api/activities", activityRoute)
 
 app.use((err, req, res, next) => {
   const errorStatus = err.status || 500

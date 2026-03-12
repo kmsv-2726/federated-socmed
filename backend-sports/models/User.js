@@ -49,6 +49,11 @@ const userSchema = new mongoose.Schema(
       default: null
     },
 
+    bannerUrl: {
+      type: String,
+      default: null
+    },
+
     serverName: {
       type: String,
       required: true
@@ -113,6 +118,16 @@ const userSchema = new mongoose.Schema(
     },
 
     unlockTokenExpiry: {
+      type: Date,
+      default: null
+    },
+
+    resetPasswordToken: {
+      type: String,
+      default: null
+    },
+
+    resetPasswordExpires: {
       type: Date,
       default: null
     },
