@@ -94,7 +94,15 @@ const ServerCard = ({ server }) => {
                 </p>
 
                 {server.enabled ? (
-                    <a href="/auth" style={{
+                    <div
+                        onClick={() => {
+                            if (server.apiUrl) {
+                                localStorage.setItem('selectedServerApi', server.apiUrl);
+                                localStorage.setItem('selectedServerName', server.name);
+                            }
+                            window.location.href = '/auth';
+                        }}
+                        style={{
                         width: '100%',
                         padding: '10px',
                         backgroundColor: 'var(--primary)',
@@ -115,7 +123,7 @@ const ServerCard = ({ server }) => {
                         onMouseLeave={(e) => e.target.style.backgroundColor = 'var(--primary)'}
                     >
                         Join Server
-                    </a>
+                    </div>
                 ) : (
                     <div style={{
                         textAlign: 'center',

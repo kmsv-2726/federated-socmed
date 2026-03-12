@@ -7,7 +7,9 @@ import {
   FiX
 } from 'react-icons/fi';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api");
+import { getApiBaseUrl } from '../config/api';
+
+const API_BASE_URL = getApiBaseUrl();
 
 const PostCreator = ({ onPostCreated, isChannelPost = false, channelName = null }) => {
   const [postContent, setPostContent] = useState('');

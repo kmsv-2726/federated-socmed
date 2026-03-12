@@ -5,7 +5,9 @@ import PostList from '../components/PostList';
 import { FiMapPin, FiCalendar, FiArrowLeft, FiUserPlus, FiUserMinus, FiX, FiVolumeX, FiVolume2, FiUserX, FiSlash } from 'react-icons/fi';
 import '../styles/Profile.css';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api");
+import { getApiBaseUrl } from '../config/api';
+
+const API_BASE_URL = getApiBaseUrl();
 
 function UserProfile() {
     const { federatedId } = useParams();

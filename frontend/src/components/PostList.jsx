@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiThumbsUp, FiMessageCircle, FiRepeat, FiMoreHorizontal, FiTrash2, FiSend, FiChevronUp, FiChevronDown, FiVolumeX } from 'react-icons/fi';
 
-const API_BASE_URL = "http://localhost:5000/api";
+import { getApiBaseUrl } from '../config/api';
+
+const API_BASE_URL = getApiBaseUrl();
 
 const PostList = ({ posts, onLike, activeTimeline, onDeletePost, onRepostSuccess, onMuteUser }) => {
   const [openMenuId, setOpenMenuId] = useState(null);
